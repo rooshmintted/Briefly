@@ -15,6 +15,7 @@ export interface Story {
   title: string
   summary?: string
   content: string
+  html_content?: string
   url?: string
   category?: string
   importance_score?: number
@@ -25,6 +26,9 @@ export interface Story {
   read_at?: string // Timestamp as ISO string
   created_at: string
   updated_at: string
+  content_type: 'newsletter' | 'video'
+  video_url?: string
+  video_duration?: number // Minutes for videos
 }
 
 // Filtered story type for UI components
@@ -46,6 +50,7 @@ export interface StoryCard {
 // Filter and sorting options
 export interface FilterOptions {
   readStatus: 'all' | 'read' | 'unread'
+  contentTypes: ('newsletter' | 'video')[]
   publications: string[]
   categories: string[]
   importanceMin: number
@@ -55,6 +60,8 @@ export interface FilterOptions {
     end?: Date
   }
   bookmarkedOnly: boolean
+  estimatedReadTimeMin?: number
+  estimatedReadTimeMax?: number
 }
 
 export interface SortOptions {
@@ -227,6 +234,7 @@ export const DEFAULT_SMART_VIEWS: SmartView[] = [
     description: 'High-priority stories from your feed',
     filters: {
       readStatus: 'all',
+      contentTypes: [],
       publications: [],
       categories: [],
       importanceMin: 7,
@@ -242,13 +250,16 @@ export const DEFAULT_SMART_VIEWS: SmartView[] = [
     name: 'Quick Reads',
     description: 'Stories under 5 minutes',
     filters: {
-      readStatus: 'unread',
+      readStatus: 'all',
+      contentTypes: [],
       publications: [],
       categories: [],
       importanceMin: 0,
       importanceMax: 10,
       dateRange: {},
-      bookmarkedOnly: false
+      bookmarkedOnly: false,
+      estimatedReadTimeMin: 0,
+      estimatedReadTimeMax: 5
     },
     sort: { field: 'estimated_read_time', direction: 'asc' },
     isDefault: true
@@ -258,13 +269,16 @@ export const DEFAULT_SMART_VIEWS: SmartView[] = [
     name: 'Deep Dives',
     description: 'Longer-form content (10+ minutes)',
     filters: {
-      readStatus: 'unread',
+      readStatus: 'all',
+      contentTypes: [],
       publications: [],
       categories: [],
       importanceMin: 0,
       importanceMax: 10,
       dateRange: {},
-      bookmarkedOnly: false
+      bookmarkedOnly: false,
+      estimatedReadTimeMin: 10,
+      estimatedReadTimeMax: 999
     },
     sort: { field: 'importance_score', direction: 'desc' },
     isDefault: true
@@ -275,6 +289,7 @@ export const DEFAULT_SMART_VIEWS: SmartView[] = [
     description: 'Saved stories for later',
     filters: {
       readStatus: 'all',
+      contentTypes: [],
       publications: [],
       categories: [],
       importanceMin: 0,

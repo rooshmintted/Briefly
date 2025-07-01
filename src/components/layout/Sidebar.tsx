@@ -48,7 +48,19 @@ export function Sidebar() {
   }
 
   const handleReadStatusFilter = (status: 'all' | 'read' | 'unread') => {
-    setFilters({ readStatus: status })
+    // Clear active smart view when manual filters are applied
+    useAppStore.getState().setFilters({ readStatus: status })
+    if (activeSmartView) {
+      useAppStore.setState({ activeSmartView: null })
+    }
+  }
+
+  const handleImportanceFilter = (importanceMin: number) => {
+    // Clear active smart view when manual filters are applied  
+    useAppStore.getState().setFilters({ importanceMin })
+    if (activeSmartView) {
+      useAppStore.setState({ activeSmartView: null })
+    }
   }
 
   return (
@@ -128,7 +140,7 @@ export function Sidebar() {
                 min="0"
                 max="10"
                 value={filters.importanceMin}
-                onChange={(e) => setFilters({ importanceMin: parseInt(e.target.value) })}
+                onChange={(e) => handleImportanceFilter(parseInt(e.target.value))}
                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
               />
               <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark w-6">

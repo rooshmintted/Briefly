@@ -18,6 +18,7 @@ import { ReadingViewProps, Story } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { clsx } from 'clsx'
 import { formatDistanceToNow } from 'date-fns'
+import { processStoryContent } from '@/lib/htmlUtils'
 
 /**
  * Full-screen reading view component
@@ -146,6 +147,27 @@ export function ReadingView({
   }
 
   const timeAgo = formatDistanceToNow(new Date(story.created_at), { addSuffix: true })
+
+  // Debug logging for HTML content
+  React.useEffect(() => {
+    if (story) {
+      console.log('[ReadingView] Story data:', {
+        id: story.id,
+        title: story.title,
+        hasHtmlContent: !!story.html_content,
+        hasContent: !!story.content,
+        htmlContentLength: story.html_content?.length || 0,
+        contentLength: story.content?.length || 0
+      })
+      
+      console.log('[ReadingView] Raw html_content:', story.html_content)
+      console.log('[ReadingView] Raw content:', story.content)
+      
+      const processedContent = processStoryContent(story)
+      console.log('[ReadingView] Processed content:', processedContent)
+      console.log('[ReadingView] Processed content length:', processedContent.length)
+    }
+  }, [story])
 
   const handleShareClick = async () => {
     if (story.url) {
@@ -280,7 +302,7 @@ export function ReadingView({
           {/* Article Content */}
           <div 
             className="reading-content prose prose-lg dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: story.content }}
+            dangerouslySetInnerHTML={{ __html: processStoryContent(story) }}
           />
 
           {/* Article Footer */}

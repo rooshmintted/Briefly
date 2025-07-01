@@ -21,12 +21,15 @@ import {
 // Default filter options
 const DEFAULT_FILTERS: FilterOptions = {
   readStatus: 'all',
+  contentTypes: [],
   publications: [],
   categories: [],
   importanceMin: 0,
   importanceMax: 10,
   dateRange: {},
-  bookmarkedOnly: false
+  bookmarkedOnly: false,
+  estimatedReadTimeMin: undefined,
+  estimatedReadTimeMax: undefined
 }
 
 // Default sort options
@@ -120,7 +123,7 @@ export const useAppStore = create<AppStore>()(
       sidebarVisible: true,
       
       smartViews: DEFAULT_SMART_VIEWS,
-      activeSmartView: 'todays-digest',
+      activeSmartView: null,
 
       // Story management actions
       loadStories: () => {
@@ -478,6 +481,13 @@ function applyFiltersAndSort(
     filtered = filtered.filter(story => story.is_bookmarked)
   }
 
+  if (filters.contentTypes && filters.contentTypes.length > 0) {
+    console.log('[applyFiltersAndSort] Filtering by content types:', filters.contentTypes)
+    const beforeContentTypeFilter = filtered.length
+    filtered = filtered.filter(story => filters.contentTypes.includes(story.content_type))
+    console.log(`[applyFiltersAndSort] After content type filter: ${beforeContentTypeFilter} -> ${filtered.length}`)
+  }
+
   if (filters.publications.length > 0) {
     filtered = filtered.filter(story => filters.publications.includes(story.publication_name))
   }
@@ -540,6 +550,34 @@ function applyFiltersAndSort(
     } catch (error) {
       console.warn('[applyFiltersAndSort] Invalid end date in filters:', filters.dateRange.end)
     }
+  }
+
+  if (filters.estimatedReadTimeMin !== undefined) {
+    console.log('[applyFiltersAndSort] Applying estimated read time min filter:', filters.estimatedReadTimeMin)
+    const beforeReadTimeFilter = filtered.length
+    filtered = filtered.filter(story => {
+      const readTime = story.estimated_read_time || 0
+      const passes = readTime >= filters.estimatedReadTimeMin!
+      if (!passes) {
+        console.log(`[applyFiltersAndSort] Story "${story.title}" filtered out by read time min - time: ${readTime}, min: ${filters.estimatedReadTimeMin}`)
+      }
+      return passes
+    })
+    console.log(`[applyFiltersAndSort] After read time min filter: ${beforeReadTimeFilter} -> ${filtered.length}`)
+  }
+
+  if (filters.estimatedReadTimeMax !== undefined) {
+    console.log('[applyFiltersAndSort] Applying estimated read time max filter:', filters.estimatedReadTimeMax)
+    const beforeReadTimeMaxFilter = filtered.length
+    filtered = filtered.filter(story => {
+      const readTime = story.estimated_read_time || 0
+      const passes = readTime <= filters.estimatedReadTimeMax!
+      if (!passes) {
+        console.log(`[applyFiltersAndSort] Story "${story.title}" filtered out by read time max - time: ${readTime}, max: ${filters.estimatedReadTimeMax}`)
+      }
+      return passes
+    })
+    console.log(`[applyFiltersAndSort] After read time max filter: ${beforeReadTimeMaxFilter} -> ${filtered.length}`)
   }
 
   // Apply sorting

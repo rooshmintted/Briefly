@@ -70,6 +70,10 @@ export class SupabaseService {
           query = query.eq('is_bookmarked', true)
         }
 
+        if (filters.contentTypes && filters.contentTypes.length > 0) {
+          query = query.in('content_type', filters.contentTypes)
+        }
+
         if (filters.publications.length > 0) {
           query = query.in('publication_name', filters.publications)
         }
@@ -110,6 +114,14 @@ export class SupabaseService {
           } catch (error) {
             console.warn('[SupabaseService] Invalid end date in filters:', filters.dateRange.end)
           }
+        }
+
+        if (filters.estimatedReadTimeMin !== undefined) {
+          query = query.gte('estimated_read_time', filters.estimatedReadTimeMin)
+        }
+
+        if (filters.estimatedReadTimeMax !== undefined) {
+          query = query.lte('estimated_read_time', filters.estimatedReadTimeMax)
         }
       }
 
@@ -211,6 +223,10 @@ export class SupabaseService {
 
         if (filters.bookmarkedOnly) {
           query = query.eq('is_bookmarked', true)
+        }
+
+        if (filters.contentTypes && filters.contentTypes.length > 0) {
+          query = query.in('content_type', filters.contentTypes)
         }
 
         if (filters.publications.length > 0) {

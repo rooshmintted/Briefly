@@ -30,12 +30,15 @@ export interface UseStoriesReturn {
 
 const DEFAULT_FILTERS: FilterOptions = {
   readStatus: 'all',
+  contentTypes: [],
   publications: [],
   categories: [],
   importanceMin: 0,
   importanceMax: 10,
   dateRange: {},
-  bookmarkedOnly: false
+  bookmarkedOnly: false,
+  estimatedReadTimeMin: undefined,
+  estimatedReadTimeMax: undefined
 }
 
 const DEFAULT_SORT: SortOptions = {

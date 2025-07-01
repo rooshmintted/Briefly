@@ -108,11 +108,21 @@ export function StoryCard({ story, onClick }: StoryCardProps) {
         {story.title}
       </h2>
 
-      {/* Summary */}
-      {story.summary && (
-        <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm mb-3 line-clamp-3">
-          {story.summary}
-        </p>
+      {/* Key Points */}
+      {story.key_points && story.key_points.length > 0 && (
+        <div className="mb-3">
+          <ul className="space-y-1">
+            {story.key_points.slice(0, 3).map((point, index) => (
+              <li 
+                key={index}
+                className="text-text-secondary-light dark:text-text-secondary-dark text-sm flex items-start"
+              >
+                <span className="text-accent-light dark:text-accent-dark mr-2 flex-shrink-0 leading-5">•</span>
+                <span className="break-words">{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Category tag */}
