@@ -1,0 +1,408 @@
+/**
+ * Supabase Service for Briefly Desktop
+ * Handles direct connections to Supabase for loading stories
+ */
+
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { Story, FilterOptions, SortOptions } from '@/types'
+
+export class SupabaseService {
+  private supabase: SupabaseClient
+  private userId: string | null = null
+
+  constructor(supabaseUrl: string, supabaseKey: string) {
+    this.supabase = createClient(supabaseUrl, supabaseKey)
+  }
+
+  /**
+   * Set the current user ID for queries
+   */
+  setUserId(userId: string): void {
+    this.userId = userId
+  }
+
+  /**
+   * Get current user ID
+   */
+  getUserId(): string | null {
+    return this.userId
+  }
+
+  /**
+   * Load stories from Supabase with filtering and pagination
+   */
+  async loadStories(
+    filters?: FilterOptions,
+    sort?: SortOptions,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<{ stories: Story[]; error?: string }> {
+    console.log('[SupabaseService] loadStories called with:', { 
+      userId: this.userId, 
+      filters, 
+      sort, 
+      limit, 
+      offset 
+    })
+
+    if (!this.userId) {
+      console.log('[SupabaseService] No user ID set, returning empty stories')
+      return { stories: [], error: 'User ID not set' }
+    }
+
+    try {
+      let query = this.supabase
+        .from('stories')
+        .select('*')
+        .eq('user_id', this.userId)
+
+      console.log('[SupabaseService] Base query created for user:', this.userId)
+
+      // Apply filters
+      if (filters) {
+        if (filters.readStatus === 'read') {
+          query = query.eq('is_read', true)
+        } else if (filters.readStatus === 'unread') {
+          query = query.eq('is_read', false)
+        }
+
+        if (filters.bookmarkedOnly) {
+          query = query.eq('is_bookmarked', true)
+        }
+
+        if (filters.publications.length > 0) {
+          query = query.in('publication_name', filters.publications)
+        }
+
+        if (filters.categories.length > 0) {
+          query = query.in('category', filters.categories)
+        }
+
+        if (filters.importanceMin > 0) {
+          query = query.gte('importance_score', filters.importanceMin)
+        }
+
+        if (filters.importanceMax < 10) {
+          query = query.lte('importance_score', filters.importanceMax)
+        }
+
+        if (filters.dateRange.start) {
+          try {
+            const startDate = filters.dateRange.start instanceof Date 
+              ? filters.dateRange.start 
+              : new Date(filters.dateRange.start)
+            if (!isNaN(startDate.getTime())) {
+              query = query.gte('created_at', startDate.toISOString())
+            }
+          } catch (error) {
+            console.warn('[SupabaseService] Invalid start date in filters:', filters.dateRange.start)
+          }
+        }
+
+        if (filters.dateRange.end) {
+          try {
+            const endDate = filters.dateRange.end instanceof Date 
+              ? filters.dateRange.end 
+              : new Date(filters.dateRange.end)
+            if (!isNaN(endDate.getTime())) {
+              query = query.lte('created_at', endDate.toISOString())
+            }
+          } catch (error) {
+            console.warn('[SupabaseService] Invalid end date in filters:', filters.dateRange.end)
+          }
+        }
+      }
+
+      // Apply sorting
+      if (sort) {
+        const ascending = sort.direction === 'asc'
+        query = query.order(sort.field, { ascending })
+      } else {
+        // Default sort: importance desc, then created_at desc
+        query = query.order('importance_score', { ascending: false })
+        query = query.order('created_at', { ascending: false })
+      }
+
+      // Apply pagination
+      query = query.range(offset, offset + limit - 1)
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('[SupabaseService] Error loading stories from Supabase:', error)
+        return { stories: [], error: error.message }
+      }
+
+      console.log('[SupabaseService] Successfully loaded stories:', {
+        count: data?.length || 0,
+        stories: data?.map(s => ({ id: s.id, title: s.title, importance_score: s.importance_score })) || []
+      })
+
+      return { stories: data || [] }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in loadStories:', err)
+      return { stories: [], error: errorMessage }
+    }
+  }
+
+  /**
+   * Load a single story by ID
+   */
+  async loadStory(storyId: string): Promise<{ story: Story | null; error?: string }> {
+    if (!this.userId) {
+      return { story: null, error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('stories')
+        .select('*')
+        .eq('id', storyId)
+        .eq('user_id', this.userId)
+        .single()
+
+      if (error) {
+        console.error('Error loading story from Supabase:', error)
+        return { story: null, error: error.message }
+      }
+
+      return { story: data }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in loadStory:', err)
+      return { story: null, error: errorMessage }
+    }
+  }
+
+  /**
+   * Search stories in Supabase
+   */
+  async searchStories(
+    searchQuery: string,
+    filters?: FilterOptions,
+    sort?: SortOptions,
+    limit: number = 50
+  ): Promise<{ stories: Story[]; error?: string }> {
+    if (!this.userId) {
+      return { stories: [], error: 'User ID not set' }
+    }
+
+    try {
+      let query = this.supabase
+        .from('stories')
+        .select('*')
+        .eq('user_id', this.userId)
+
+      // Apply text search - using Supabase's text search capabilities
+      if (searchQuery.trim()) {
+        query = query.or(`title.ilike.%${searchQuery}%,summary.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%,publication_name.ilike.%${searchQuery}%`)
+      }
+
+      // Apply additional filters
+      if (filters) {
+        if (filters.readStatus === 'read') {
+          query = query.eq('is_read', true)
+        } else if (filters.readStatus === 'unread') {
+          query = query.eq('is_read', false)
+        }
+
+        if (filters.bookmarkedOnly) {
+          query = query.eq('is_bookmarked', true)
+        }
+
+        if (filters.publications.length > 0) {
+          query = query.in('publication_name', filters.publications)
+        }
+
+        if (filters.categories.length > 0) {
+          query = query.in('category', filters.categories)
+        }
+      }
+
+      // Apply sorting
+      if (sort) {
+        const ascending = sort.direction === 'asc'
+        query = query.order(sort.field, { ascending })
+      } else {
+        query = query.order('importance_score', { ascending: false })
+        query = query.order('created_at', { ascending: false })
+      }
+
+      query = query.limit(limit)
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Error searching stories in Supabase:', error)
+        return { stories: [], error: error.message }
+      }
+
+      return { stories: data || [] }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in searchStories:', err)
+      return { stories: [], error: errorMessage }
+    }
+  }
+
+  /**
+   * Update story read status
+   */
+  async updateStoryReadStatus(storyId: string, isRead: boolean): Promise<{ success: boolean; error?: string }> {
+    if (!this.userId) {
+      return { success: false, error: 'User ID not set' }
+    }
+
+    try {
+      const updateData: any = {
+        is_read: isRead,
+        updated_at: new Date().toISOString()
+      }
+
+      if (isRead) {
+        updateData.read_at = new Date().toISOString()
+      } else {
+        updateData.read_at = null
+      }
+
+      const { error } = await this.supabase
+        .from('stories')
+        .update(updateData)
+        .eq('id', storyId)
+        .eq('user_id', this.userId)
+
+      if (error) {
+        console.error('Error updating story read status:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in updateStoryReadStatus:', err)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  /**
+   * Update story bookmark status
+   */
+  async updateStoryBookmarkStatus(storyId: string, isBookmarked: boolean): Promise<{ success: boolean; error?: string }> {
+    if (!this.userId) {
+      return { success: false, error: 'User ID not set' }
+    }
+
+    try {
+      const { error } = await this.supabase
+        .from('stories')
+        .update({
+          is_bookmarked: isBookmarked,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', storyId)
+        .eq('user_id', this.userId)
+
+      if (error) {
+        console.error('Error updating story bookmark status:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in updateStoryBookmarkStatus:', err)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  /**
+   * Get available publications for filtering
+   */
+  async getAvailablePublications(): Promise<{ publications: string[]; error?: string }> {
+    if (!this.userId) {
+      return { publications: [], error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('stories')
+        .select('publication_name')
+        .eq('user_id', this.userId)
+        .not('publication_name', 'is', null)
+
+      if (error) {
+        console.error('Error getting publications:', error)
+        return { publications: [], error: error.message }
+      }
+
+      const publications = [...new Set(data?.map(item => item.publication_name) || [])].sort()
+      return { publications }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in getAvailablePublications:', err)
+      return { publications: [], error: errorMessage }
+    }
+  }
+
+  /**
+   * Get available categories for filtering
+   */
+  async getAvailableCategories(): Promise<{ categories: string[]; error?: string }> {
+    if (!this.userId) {
+      return { categories: [], error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('stories')
+        .select('category')
+        .eq('user_id', this.userId)
+        .not('category', 'is', null)
+
+      if (error) {
+        console.error('Error getting categories:', error)
+        return { categories: [], error: error.message }
+      }
+
+      const categories = [...new Set(data?.map(item => item.category) || [])].sort()
+      return { categories }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in getAvailableCategories:', err)
+      return { categories: [], error: errorMessage }
+    }
+  }
+}
+
+/**
+ * Create and configure Supabase service instance
+ * Uses Electron's environment variable access pattern
+ */
+function createSupabaseService(): SupabaseService | null {
+  const supabaseUrl = window.electronAPI?.env.SUPABASE_URL
+  const supabaseKey = window.electronAPI?.env.SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('[SupabaseService] Supabase credentials not available')
+    return null
+  }
+
+  return new SupabaseService(supabaseUrl, supabaseKey)
+}
+
+// Export factory function and lazy-initialized service
+export const createSupabaseServiceInstance = createSupabaseService
+export let supabaseService: SupabaseService | null = null
+
+// Initialize service when window.electronAPI is available
+if (typeof window !== 'undefined' && window.electronAPI?.env) {
+  supabaseService = createSupabaseService()
+} 
