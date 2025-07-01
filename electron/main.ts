@@ -119,8 +119,8 @@ class BrieflyApp {
       this.mainWindow.webContents.openDevTools()
     } else {
       console.log('Loading from file system')
-      // In production, load from the dist directory
-      this.mainWindow.loadFile(join(currentDir, '../dist/index.html'))
+      // In production, load from the dist-renderer directory
+      this.mainWindow.loadFile(join(currentDir, '../dist-renderer/index.html'))
     }
 
     // Show window when ready
@@ -256,6 +256,11 @@ class BrieflyApp {
 
     ipcMain.handle('close-window', () => {
       this.mainWindow?.close()
+    })
+
+    // Handle app refresh (useful after credentials update)
+    ipcMain.handle('refresh-app', () => {
+      this.mainWindow?.reload()
     })
   }
 }

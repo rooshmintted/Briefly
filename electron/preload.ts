@@ -26,6 +26,7 @@ interface ElectronAPI {
   minimizeWindow: () => Promise<void>
   maximizeWindow: () => Promise<void>
   closeWindow: () => Promise<void>
+  refreshApp: () => Promise<void>
   
   // Event listeners
   onSync: (callback: () => void) => void
@@ -56,6 +57,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
+  refreshApp: () => ipcRenderer.invoke('refresh-app'),
   
   // Event listeners
   onSync: (callback: () => void) => {

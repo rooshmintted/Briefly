@@ -145,13 +145,13 @@ export const useAppStore = create<AppStore>()(
           
           try {
             console.log('[AppStore] Loading Supabase data')
-            const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+            const { supabaseService, createSupabaseServiceInstance, SupabaseService } = await import('@/lib/supabase')
             
             // Initialize service if not already done
-            let service = supabaseService
+            let service: InstanceType<typeof SupabaseService> | null = supabaseService
             if (!service) {
               console.log('[AppStore] Initializing Supabase service')
-              service = createSupabaseServiceInstance()
+              service = await createSupabaseServiceInstance()
             }
             
             if (!service) {
@@ -163,7 +163,20 @@ export const useAppStore = create<AppStore>()(
               return
             }
 
-            service.setUserId(userId)
+            // Get user ID from environment or stored settings
+            let currentUserId = userId
+            if (!currentUserId || currentUserId === 'dev-user') {
+              try {
+                const storedUserId = await window.electronAPI?.getAppSetting('userId')
+                if (storedUserId) {
+                  currentUserId = storedUserId
+                }
+              } catch (error) {
+                console.warn('[AppStore] Could not retrieve stored user ID:', error)
+              }
+            }
+
+            service.setUserId(currentUserId)
             
             // Load ALL stories first (without read status filter to ensure we get everything)
             const loadAllFilters = {
@@ -256,9 +269,24 @@ export const useAppStore = create<AppStore>()(
         
         // Update backend
         import('@/lib/supabase').then(async ({ supabaseService, createSupabaseServiceInstance }) => {
-          let service = supabaseService || createSupabaseServiceInstance()
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
           if (service) {
-            service.setUserId(userId)
+            // Get user ID from environment or stored settings
+            let currentUserId = userId
+            if (!currentUserId || currentUserId === 'dev-user') {
+              try {
+                const storedUserId = await window.electronAPI?.getAppSetting('userId')
+                if (storedUserId) {
+                  currentUserId = storedUserId
+                }
+              } catch (error) {
+                console.warn('Could not retrieve stored user ID for read status update:', error)
+              }
+            }
+            service.setUserId(currentUserId)
             const result = await service.updateStoryReadStatus(storyId, isRead)
             if (result.error) {
               console.error('Error updating read status in Supabase:', result.error)
@@ -280,9 +308,24 @@ export const useAppStore = create<AppStore>()(
 
           // Update backend
           import('@/lib/supabase').then(async ({ supabaseService, createSupabaseServiceInstance }) => {
-            let service = supabaseService || createSupabaseServiceInstance()
+            let service = supabaseService
+            if (!service) {
+              service = await createSupabaseServiceInstance()
+            }
             if (service) {
-              service.setUserId(userId)
+              // Get user ID from environment or stored settings
+              let currentUserId = userId
+              if (!currentUserId || currentUserId === 'dev-user') {
+                try {
+                  const storedUserId = await window.electronAPI?.getAppSetting('userId')
+                  if (storedUserId) {
+                    currentUserId = storedUserId
+                  }
+                } catch (error) {
+                  console.warn('Could not retrieve stored user ID for bookmark update:', error)
+                }
+              }
+              service.setUserId(currentUserId)
               const result = await service.updateStoryBookmarkStatus(storyId, isBookmarked)
               if (result.error) {
                 console.error('Error updating bookmark status in Supabase:', result.error)

@@ -7,7 +7,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
-import App from './App'
+import { AppWithCredentials } from './components/AppWithCredentials'
 import './index.css'
 
 // Create React Query client with optimized settings for offline-first experience
@@ -37,7 +37,7 @@ function AppWithProviders() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <AppWithCredentials />
       </BrowserRouter>
     </QueryClientProvider>
   )

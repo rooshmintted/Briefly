@@ -400,11 +400,22 @@ export class SupabaseService {
 
 /**
  * Create and configure Supabase service instance
- * Uses Electron's environment variable access pattern
+ * Uses Electron's environment variable access pattern with stored credentials fallback
  */
-function createSupabaseService(): SupabaseService | null {
-  const supabaseUrl = window.electronAPI?.env.SUPABASE_URL
-  const supabaseKey = window.electronAPI?.env.SUPABASE_ANON_KEY
+async function createSupabaseService(): Promise<SupabaseService | null> {
+  // First try environment variables
+  let supabaseUrl = window.electronAPI?.env.SUPABASE_URL
+  let supabaseKey = window.electronAPI?.env.SUPABASE_ANON_KEY
+
+  // If environment variables aren't available, try stored credentials
+  if (!supabaseUrl || !supabaseKey) {
+    try {
+      supabaseUrl = await window.electronAPI?.getAppSetting('supabaseUrl')
+      supabaseKey = await window.electronAPI?.getAppSetting('supabaseKey')
+    } catch (error) {
+      console.warn('[SupabaseService] Could not retrieve stored credentials:', error)
+    }
+  }
 
   if (!supabaseUrl || !supabaseKey) {
     console.warn('[SupabaseService] Supabase credentials not available')
@@ -414,11 +425,32 @@ function createSupabaseService(): SupabaseService | null {
   return new SupabaseService(supabaseUrl, supabaseKey)
 }
 
+/**
+ * Get or create Supabase service instance
+ */
+async function getSupabaseServiceInstance(): Promise<SupabaseService | null> {
+  if (!supabaseService) {
+    supabaseService = await createSupabaseService()
+  }
+  return supabaseService
+}
+
+/**
+ * Force refresh of Supabase service instance (useful after credentials update)
+ */
+async function refreshSupabaseService(): Promise<SupabaseService | null> {
+  supabaseService = null
+  return await getSupabaseServiceInstance()
+}
+
 // Export factory function and lazy-initialized service
-export const createSupabaseServiceInstance = createSupabaseService
+export const createSupabaseServiceInstance = getSupabaseServiceInstance
+export const refreshSupabaseServiceInstance = refreshSupabaseService
 export let supabaseService: SupabaseService | null = null
 
 // Initialize service when window.electronAPI is available
 if (typeof window !== 'undefined' && window.electronAPI?.env) {
-  supabaseService = createSupabaseService()
+  createSupabaseService().then(service => {
+    supabaseService = service
+  })
 } 

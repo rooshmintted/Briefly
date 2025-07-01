@@ -8,7 +8,8 @@ export default {
     output: "build"
   },
   files: [
-    "dist/**/*",
+    "dist-main/**/*",
+    "dist-renderer/**/*",
     "node_modules/**/*",
     "package.json"
   ],
