@@ -182,7 +182,7 @@ export function ReadingView({
   }
 
   return (
-    <div className="reading-view relative">
+    <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50">
       {/* Reading Progress Bar */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-700 z-10">
         <div 
@@ -253,9 +253,9 @@ export function ReadingView({
       </div>
 
       {/* Reading Content */}
-      <div className="reading-content-scroll h-full overflow-y-auto pt-20 pb-8">
+      <div className="reading-content-scroll absolute inset-0 overflow-y-auto pt-20 pb-8">
         <div className={clsx(
-          'reading-content px-8',
+          'reading-content px-8 mx-auto',
           settings.reading.contentWidth === 'narrow' && 'max-w-2xl',
           settings.reading.contentWidth === 'medium' && 'max-w-3xl',
           settings.reading.contentWidth === 'wide' && 'max-w-4xl',
