@@ -4,6 +4,102 @@
  */
 
 /**
+ * Converts image links to actual img tags for better display
+ */
+function convertImageLinksToTags(htmlContent: string): string {
+  if (!htmlContent) return ''
+
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(htmlContent, 'text/html')
+    
+    // Find all links that point to images
+    const links = doc.querySelectorAll('a[href]')
+    
+    links.forEach(link => {
+      const href = link.getAttribute('href')
+      if (!href) return
+      
+      // Check if the link points to an image
+      const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i
+      const isImageLink = imageExtensions.test(href)
+      
+      // Also check if the link text suggests it's an image
+      const linkText = link.textContent?.toLowerCase() || ''
+      const suggestsImage = linkText.includes('image') || 
+                           linkText.includes('photo') || 
+                           linkText.includes('picture') ||
+                           linkText.includes('img') ||
+                           linkText === href.split('/').pop()?.toLowerCase()
+      
+      if (isImageLink || (suggestsImage && href.startsWith('http'))) {
+        // Create an img element
+        const img = doc.createElement('img')
+        img.src = href
+        img.alt = link.textContent || 'Image'
+        img.className = 'story-image'
+        
+        // Create a wrapper div for the image
+        const wrapper = doc.createElement('div')
+        wrapper.className = 'story-image-wrapper'
+        wrapper.appendChild(img)
+        
+        // Replace the link with the image
+        link.parentNode?.replaceChild(wrapper, link)
+      }
+    })
+    
+    return doc.body?.innerHTML || htmlContent
+  } catch (error) {
+    console.warn('Error converting image links:', error)
+    return htmlContent
+  }
+}
+
+/**
+ * Processes embedded images and ensures they have proper attributes
+ */
+function processImages(htmlContent: string): string {
+  if (!htmlContent) return ''
+
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(htmlContent, 'text/html')
+    
+    // Find all existing img tags
+    const images = doc.querySelectorAll('img')
+    
+    images.forEach(img => {
+      // Add CSS class for styling
+      img.classList.add('story-image')
+      
+      // Ensure alt attribute exists
+      if (!img.getAttribute('alt')) {
+        img.setAttribute('alt', 'Image')
+      }
+      
+      // Add loading attribute for performance
+      img.setAttribute('loading', 'lazy')
+      
+      // Wrap standalone images in a wrapper div if not already wrapped
+      const parent = img.parentElement
+      if (parent && parent.tagName.toLowerCase() !== 'div' && 
+          !parent.classList.contains('story-image-wrapper')) {
+        const wrapper = doc.createElement('div')
+        wrapper.className = 'story-image-wrapper'
+        parent.insertBefore(wrapper, img)
+        wrapper.appendChild(img)
+      }
+    })
+    
+    return doc.body?.innerHTML || htmlContent
+  } catch (error) {
+    console.warn('Error processing images:', error)
+    return htmlContent
+  }
+}
+
+/**
  * Extracts and cleans HTML content for safe rendering
  * Removes document structure and keeps only the article content
  */
@@ -70,7 +166,7 @@ export function cleanHtmlContent(htmlContent: string): string {
     })
     
     // Remove unwanted attributes but keep useful ones
-    const allowedAttributes = ['href', 'src', 'alt', 'title', 'class']
+    const allowedAttributes = ['href', 'src', 'alt', 'title', 'class', 'loading', 'width', 'height']
     const walker = document.createTreeWalker(
       cleanedElement,
       NodeFilter.SHOW_ELEMENT,
@@ -138,14 +234,19 @@ export function processStoryContent(story: { html_content?: string; content: str
     isFullDocument: isFullHtmlDocument(htmlContent)
   })
   
+  let processedContent = htmlContent
+  
   if (isFullHtmlDocument(htmlContent)) {
     console.log('[processStoryContent] Processing as full HTML document')
-    const cleaned = cleanHtmlContent(htmlContent)
-    console.log('[processStoryContent] Cleaned result:', cleaned)
-    console.log('[processStoryContent] Cleaned length:', cleaned.length)
-    return cleaned
+    processedContent = cleanHtmlContent(htmlContent)
   }
   
-  console.log('[processStoryContent] Using content as-is (not full HTML document)')
-  return htmlContent
+  // Convert image links to actual img tags
+  processedContent = convertImageLinksToTags(processedContent)
+  
+  // Process existing images to ensure proper attributes and styling
+  processedContent = processImages(processedContent)
+  
+  console.log('[processStoryContent] Final processed content length:', processedContent.length)
+  return processedContent
 } 

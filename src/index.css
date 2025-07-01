@@ -98,6 +98,52 @@
   .reading-content a {
     @apply text-accent-light dark:text-accent-dark hover:underline;
   }
+
+  /* Image styles for reading content */
+  .reading-content .story-image-wrapper {
+    @apply my-6 text-center;
+  }
+  
+  .reading-content .story-image {
+    @apply max-w-full h-auto rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;
+    display: inline-block;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .reading-content .story-image:hover {
+    @apply shadow-md;
+    transform: scale(1.02);
+  }
+  
+  /* Responsive image sizing */
+  .reading-content .story-image {
+    max-height: 60vh;
+    width: auto;
+  }
+  
+  /* Handle images within paragraphs */
+  .reading-content p .story-image-wrapper {
+    @apply my-4;
+  }
+  
+  /* Dark mode image adjustments */
+  .dark .reading-content .story-image {
+    @apply opacity-90 hover:opacity-100;
+  }
+  
+  /* Loading state for images */
+  .reading-content .story-image[loading="lazy"] {
+    @apply transition-opacity duration-300;
+  }
+  
+  /* Additional prose image styling to override default prose styles */
+  .reading-content.prose img {
+    @apply my-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 max-w-full h-auto;
+  }
+  
+  .dark .reading-content.prose img {
+    @apply opacity-90 hover:opacity-100;
+  }
   
   /* Button styles */
   .btn-primary {
