@@ -6,8 +6,7 @@
 import React from 'react'
 import { 
   BookmarkIcon as BookmarkOutline,
-  ClockIcon,
-  StarIcon
+  ClockIcon
 } from '@heroicons/react/24/outline'
 import { 
   BookmarkIcon as BookmarkSolid 
@@ -52,17 +51,45 @@ export function StoryCard({ story, onClick }: StoryCardProps) {
     markStoryAsRead(story.id, !story.is_read)
   }
 
-  const getImportanceStars = (score: number) => {
-    const stars = Math.min(3, Math.max(0, Math.floor(score / 3)))
-    return Array.from({ length: 3 }, (_, i) => (
-      <StarIcon 
-        key={i}
-        className={clsx(
-          'w-3 h-3',
-          i < stars ? 'text-yellow-400 fill-current' : 'text-gray-300 dark:text-gray-600'
-        )}
-      />
-    ))
+  const getRatingDisplay = (rating?: number) => {
+    if (!rating && rating !== 0) {
+      return (
+        <span className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1 rounded">
+          No rating
+        </span>
+      )
+    }
+
+    // Color-coded rating system (0-10 scale)
+    const getRatingColor = (rating: number) => {
+      if (rating <= 3) return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+      if (rating <= 5) return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+      if (rating <= 7) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+      if (rating <= 8.5) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
+    }
+
+    const getRatingLabel = (rating: number) => {
+      if (rating <= 3) return 'Poor'
+      if (rating <= 5) return 'Fair'
+      if (rating <= 7) return 'Good'
+      if (rating <= 8.5) return 'Great'
+      return 'Excellent'
+    }
+
+    return (
+      <div className="flex items-center space-x-1">
+        <span className={clsx(
+          'text-xs font-medium px-2 py-1 rounded-full',
+          getRatingColor(rating)
+        )}>
+          {rating.toFixed(1)}
+        </span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {getRatingLabel(rating)}
+        </span>
+      </div>
+    )
   }
 
   const timeAgo = formatTimeAgo(story.created_at)
@@ -93,9 +120,9 @@ export function StoryCard({ story, onClick }: StoryCardProps) {
           </>
         </div>
         
-        {/* Importance stars */}
-        <div className="flex items-center space-x-1">
-          {getImportanceStars(story.importance_score || 0)}
+        {/* Rating display */}
+        <div className="flex items-center">
+          {getRatingDisplay(story.rating)}
         </div>
       </header>
 

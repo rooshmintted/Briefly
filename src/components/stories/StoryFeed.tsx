@@ -71,8 +71,8 @@ export function StoryFeed() {
   if (isLoading && filteredStories.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="spinner mb-4"></div>
+        <div className="flex flex-col items-center justify-center text-center">
+          <div className="spinner mb-4 mx-auto"></div>
           <p className="text-text-secondary-light dark:text-text-secondary-dark">
             Loading stories...
           </p>
