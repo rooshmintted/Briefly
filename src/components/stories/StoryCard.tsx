@@ -15,7 +15,7 @@ import {
 import { Story } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { clsx } from 'clsx'
-import { formatDistanceToNow } from 'date-fns'
+import { formatTimeAgo } from '@/lib/dateUtils'
 
 interface StoryCardProps {
   story: Story
@@ -65,7 +65,7 @@ export function StoryCard({ story, onClick }: StoryCardProps) {
     ))
   }
 
-  const timeAgo = formatDistanceToNow(new Date(story.created_at), { addSuffix: true })
+  const timeAgo = formatTimeAgo(story.created_at)
 
   return (
     <article 

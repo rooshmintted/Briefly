@@ -17,6 +17,7 @@ import {
   SmartView,
   DEFAULT_SMART_VIEWS
 } from '@/types'
+import { parseTimestamp } from '@/lib/dateUtils'
 
 // Default filter options
 const DEFAULT_FILTERS: FilterOptions = {
@@ -32,9 +33,9 @@ const DEFAULT_FILTERS: FilterOptions = {
   estimatedReadTimeMax: undefined
 }
 
-// Default sort options
+// Default sort options - newest stories first
 const DEFAULT_SORT: SortOptions = {
-  field: 'importance_score',
+  field: 'created_at',
   direction: 'desc'
 }
 
@@ -198,7 +199,7 @@ export const useAppStore = create<AppStore>()(
             const stories = result.stories
             console.log('[AppStore] Successfully loaded stories from Supabase:', stories.length)
 
-            const filteredStories = applyFiltersAndSort(stories, state.filters, state.sort, state.searchQuery)
+            const filteredStories = applyFiltersAndSearch(stories, state.filters, state.searchQuery)
             console.log('[AppStore] Stories after initial filtering:', filteredStories.length)
             
             set({ 
@@ -215,7 +216,7 @@ export const useAppStore = create<AppStore>()(
               const activeView = currentState.smartViews.find(v => v.id === currentState.activeSmartView)
               if (activeView) {
                 console.log('[AppStore] Found smart view:', activeView.name, activeView.filters)
-                const smartViewFiltered = applyFiltersAndSort(stories, activeView.filters, activeView.sort, '')
+                const smartViewFiltered = applyFiltersAndSearch(stories, activeView.filters, '')
                 console.log('[AppStore] Stories after smart view filtering:', smartViewFiltered.length)
                 set({ filteredStories: smartViewFiltered })
               }
@@ -360,7 +361,7 @@ export const useAppStore = create<AppStore>()(
           const updatedFilters = { ...state.filters, ...newFilters }
           return {
             filters: updatedFilters,
-            filteredStories: applyFiltersAndSort(state.stories, updatedFilters, state.sort, state.searchQuery)
+            filteredStories: applyFiltersAndSearch(state.stories, updatedFilters, state.searchQuery)
           }
         })
       },
@@ -368,21 +369,21 @@ export const useAppStore = create<AppStore>()(
       resetFilters: () => {
         set((state) => ({
           filters: DEFAULT_FILTERS,
-          filteredStories: applyFiltersAndSort(state.stories, DEFAULT_FILTERS, state.sort, state.searchQuery)
+          filteredStories: applyFiltersAndSearch(state.stories, DEFAULT_FILTERS, state.searchQuery)
         }))
       },
 
       setSort: (sort) => {
         set((state) => ({
           sort,
-          filteredStories: applyFiltersAndSort(state.stories, state.filters, sort, state.searchQuery)
+          filteredStories: applyFiltersAndSearch(state.stories, state.filters, state.searchQuery)
         }))
       },
 
       setSearchQuery: (query) => {
         set((state) => ({
           searchQuery: query,
-          filteredStories: applyFiltersAndSort(state.stories, state.filters, state.sort, query)
+          filteredStories: applyFiltersAndSearch(state.stories, state.filters, query)
         }))
       },
 
@@ -392,7 +393,7 @@ export const useAppStore = create<AppStore>()(
         set((state) => {
           const updatedFilters = view.filters
           const updatedSort = view.sort
-          const filteredStories = applyFiltersAndSort(state.stories, updatedFilters, updatedSort, '')
+          const filteredStories = applyFiltersAndSearch(state.stories, updatedFilters, '')
           console.log('[AppStore] Stories after applying smart view:', {
             totalStories: state.stories.length,
             filteredStories: filteredStories.length,
@@ -479,18 +480,17 @@ export const useAppStore = create<AppStore>()(
 )
 
 /**
- * Apply filters, sorting, and search to stories array
+ * Apply filters and search to stories array
+ * Note: Sorting is handled at the database level in Supabase
  */
-function applyFiltersAndSort(
+function applyFiltersAndSearch(
   stories: Story[], 
   filters: FilterOptions, 
-  sort: SortOptions, 
   searchQuery: string
 ): Story[] {
-  console.log('[applyFiltersAndSort] Starting with:', {
+  console.log('[applyFiltersAndSearch] Starting with:', {
     storiesCount: stories.length,
     filters,
-    sort,
     searchQuery
   })
   
@@ -509,15 +509,15 @@ function applyFiltersAndSort(
 
   // Apply filters
   if (filters.readStatus === 'read') {
-    console.log('[applyFiltersAndSort] Filtering for read stories only')
+    console.log('[applyFiltersAndSearch] Filtering for read stories only')
     const beforeReadFilter = filtered.length
     filtered = filtered.filter(story => story.is_read)
-    console.log(`[applyFiltersAndSort] After read filter: ${beforeReadFilter} -> ${filtered.length}`)
+    console.log(`[applyFiltersAndSearch] After read filter: ${beforeReadFilter} -> ${filtered.length}`)
   } else if (filters.readStatus === 'unread') {
-    console.log('[applyFiltersAndSort] Filtering for unread stories only')
+    console.log('[applyFiltersAndSearch] Filtering for unread stories only')
     const beforeUnreadFilter = filtered.length
     filtered = filtered.filter(story => !story.is_read)
-    console.log(`[applyFiltersAndSort] After unread filter: ${beforeUnreadFilter} -> ${filtered.length}`)
+    console.log(`[applyFiltersAndSearch] After unread filter: ${beforeUnreadFilter} -> ${filtered.length}`)
   }
 
   if (filters.bookmarkedOnly) {
@@ -525,10 +525,10 @@ function applyFiltersAndSort(
   }
 
   if (filters.contentTypes && filters.contentTypes.length > 0) {
-    console.log('[applyFiltersAndSort] Filtering by content types:', filters.contentTypes)
+    console.log('[applyFiltersAndSearch] Filtering by content types:', filters.contentTypes)
     const beforeContentTypeFilter = filtered.length
     filtered = filtered.filter(story => filters.contentTypes.includes(story.content_type))
-    console.log(`[applyFiltersAndSort] After content type filter: ${beforeContentTypeFilter} -> ${filtered.length}`)
+    console.log(`[applyFiltersAndSearch] After content type filter: ${beforeContentTypeFilter} -> ${filtered.length}`)
   }
 
   if (filters.publications.length > 0) {
@@ -540,26 +540,26 @@ function applyFiltersAndSort(
   }
 
   if (filters.importanceMin > 0) {
-    console.log('[applyFiltersAndSort] Applying importance min filter:', filters.importanceMin)
+    console.log('[applyFiltersAndSearch] Applying importance min filter:', filters.importanceMin)
     const beforeImportanceFilter = filtered.length
     filtered = filtered.filter(story => {
       const importance = story.importance_score || 0
       const passes = importance >= filters.importanceMin
       if (!passes) {
-        console.log(`[applyFiltersAndSort] Story "${story.title}" filtered out by importance - score: ${importance}, min: ${filters.importanceMin}`)
+        console.log(`[applyFiltersAndSearch] Story "${story.title}" filtered out by importance - score: ${importance}, min: ${filters.importanceMin}`)
       }
       return passes
     })
-    console.log(`[applyFiltersAndSort] After importance min filter: ${beforeImportanceFilter} -> ${filtered.length}`)
+    console.log(`[applyFiltersAndSearch] After importance min filter: ${beforeImportanceFilter} -> ${filtered.length}`)
   }
 
   if (filters.importanceMax < 10) {
-    console.log('[applyFiltersAndSort] Applying importance max filter:', filters.importanceMax)
+    console.log('[applyFiltersAndSearch] Applying importance max filter:', filters.importanceMax)
     filtered = filtered.filter(story => (story.importance_score || 0) <= filters.importanceMax)
   }
 
   if (filters.dateRange.start) {
-    console.log('[applyFiltersAndSort] Applying date range start filter:', filters.dateRange.start)
+    console.log('[applyFiltersAndSearch] Applying date range start filter:', filters.dateRange.start)
     try {
       const startDate = filters.dateRange.start instanceof Date 
         ? filters.dateRange.start 
@@ -567,96 +567,66 @@ function applyFiltersAndSort(
       if (!isNaN(startDate.getTime())) {
         const beforeDateFilter = filtered.length
         filtered = filtered.filter(story => {
-          const storyDate = new Date(story.created_at)
-          const passes = storyDate >= startDate
+          const storyDate = parseTimestamp(story.created_at)
+          const passes = storyDate ? storyDate >= startDate : false
           if (!passes) {
-            console.log(`[applyFiltersAndSort] Story "${story.title}" filtered out by date - story: ${storyDate}, filter: ${startDate}`)
+            console.log(`[applyFiltersAndSearch] Story "${story.title}" filtered out by date - story: ${storyDate}, filter: ${startDate}`)
           }
           return passes
         })
-        console.log(`[applyFiltersAndSort] After date start filter: ${beforeDateFilter} -> ${filtered.length}`)
+        console.log(`[applyFiltersAndSearch] After date start filter: ${beforeDateFilter} -> ${filtered.length}`)
       }
     } catch (error) {
-      console.warn('[applyFiltersAndSort] Invalid start date in filters:', filters.dateRange.start)
+      console.warn('[applyFiltersAndSearch] Invalid start date in filters:', filters.dateRange.start)
     }
   }
 
   if (filters.dateRange.end) {
-    console.log('[applyFiltersAndSort] Applying date range end filter:', filters.dateRange.end)
+    console.log('[applyFiltersAndSearch] Applying date range end filter:', filters.dateRange.end)
     try {
       const endDate = filters.dateRange.end instanceof Date 
         ? filters.dateRange.end 
         : new Date(filters.dateRange.end)
       if (!isNaN(endDate.getTime())) {
-        filtered = filtered.filter(story => new Date(story.created_at) <= endDate)
+        filtered = filtered.filter(story => {
+          const storyDate = parseTimestamp(story.created_at)
+          return storyDate ? storyDate <= endDate : false
+        })
       }
     } catch (error) {
-      console.warn('[applyFiltersAndSort] Invalid end date in filters:', filters.dateRange.end)
+      console.warn('[applyFiltersAndSearch] Invalid end date in filters:', filters.dateRange.end)
     }
   }
 
   if (filters.estimatedReadTimeMin !== undefined) {
-    console.log('[applyFiltersAndSort] Applying estimated read time min filter:', filters.estimatedReadTimeMin)
+    console.log('[applyFiltersAndSearch] Applying estimated read time min filter:', filters.estimatedReadTimeMin)
     const beforeReadTimeFilter = filtered.length
     filtered = filtered.filter(story => {
       const readTime = story.estimated_read_time || 0
       const passes = readTime >= filters.estimatedReadTimeMin!
       if (!passes) {
-        console.log(`[applyFiltersAndSort] Story "${story.title}" filtered out by read time min - time: ${readTime}, min: ${filters.estimatedReadTimeMin}`)
+        console.log(`[applyFiltersAndSearch] Story "${story.title}" filtered out by read time min - time: ${readTime}, min: ${filters.estimatedReadTimeMin}`)
       }
       return passes
     })
-    console.log(`[applyFiltersAndSort] After read time min filter: ${beforeReadTimeFilter} -> ${filtered.length}`)
+    console.log(`[applyFiltersAndSearch] After read time min filter: ${beforeReadTimeFilter} -> ${filtered.length}`)
   }
 
   if (filters.estimatedReadTimeMax !== undefined) {
-    console.log('[applyFiltersAndSort] Applying estimated read time max filter:', filters.estimatedReadTimeMax)
+    console.log('[applyFiltersAndSearch] Applying estimated read time max filter:', filters.estimatedReadTimeMax)
     const beforeReadTimeMaxFilter = filtered.length
     filtered = filtered.filter(story => {
       const readTime = story.estimated_read_time || 0
       const passes = readTime <= filters.estimatedReadTimeMax!
       if (!passes) {
-        console.log(`[applyFiltersAndSort] Story "${story.title}" filtered out by read time max - time: ${readTime}, max: ${filters.estimatedReadTimeMax}`)
+        console.log(`[applyFiltersAndSearch] Story "${story.title}" filtered out by read time max - time: ${readTime}, max: ${filters.estimatedReadTimeMax}`)
       }
       return passes
     })
-    console.log(`[applyFiltersAndSort] After read time max filter: ${beforeReadTimeMaxFilter} -> ${filtered.length}`)
+    console.log(`[applyFiltersAndSearch] After read time max filter: ${beforeReadTimeMaxFilter} -> ${filtered.length}`)
   }
 
-  // Apply sorting
-  filtered.sort((a, b) => {
-    let aValue: any
-    let bValue: any
-
-    switch (sort.field) {
-      case 'importance_score':
-        aValue = a.importance_score || 0
-        bValue = b.importance_score || 0
-        break
-      case 'created_at':
-        aValue = new Date(a.created_at).getTime()
-        bValue = new Date(b.created_at).getTime()
-        break
-      case 'publication_name':
-        aValue = a.publication_name.toLowerCase()
-        bValue = b.publication_name.toLowerCase()
-        break
-      case 'estimated_read_time':
-        aValue = a.estimated_read_time || 0
-        bValue = b.estimated_read_time || 0
-        break
-      default:
-        return 0
-    }
-
-    if (sort.direction === 'asc') {
-      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
-    } else {
-      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
-    }
-  })
-
-  console.log('[applyFiltersAndSort] Final result:', {
+  console.log('[applyFiltersAndSearch] Final result:', {
     originalCount: stories.length,
     filteredCount: filtered.length,
     filtered: filtered.map(s => ({

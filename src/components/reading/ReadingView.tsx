@@ -1,6 +1,7 @@
 /**
  * Reading View Component
  * Displays a story in full reading mode with reading controls and navigation
+ * Enhanced with beautiful typography and formatting for optimal reading experience
  */
 
 import React, { useEffect, useState } from 'react'
@@ -17,11 +18,11 @@ import {
 import { ReadingViewProps, Story } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { clsx } from 'clsx'
-import { formatDistanceToNow } from 'date-fns'
+import { formatTimeAgo } from '@/lib/dateUtils'
 import { processStoryContent } from '@/lib/htmlUtils'
 
 /**
- * Full-screen reading view component
+ * Full-screen reading view component with enhanced typography
  */
 export function ReadingView({ 
   storyId, 
@@ -35,9 +36,21 @@ export function ReadingView({
   const [loadedStory, setLoadedStory] = useState<Story | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentRating, setCurrentRating] = useState<number>(0)
+  const [isUpdatingRating, setIsUpdatingRating] = useState(false)
+  const [pendingRating, setPendingRating] = useState<number | null>(null)
   
   // Try to find story in current stories array first
   const story = stories.find(s => s.id === storyId) || loadedStory
+
+  // Initialize rating when story changes
+  useEffect(() => {
+    if (story) {
+      setCurrentRating(story.rating || 0)
+      setPendingRating(null) // Clear any pending rating when story changes
+      setIsUpdatingRating(false) // Reset updating state
+    }
+  }, [story])
 
   // Load story directly from Supabase if not found in current stories
   useEffect(() => {
@@ -56,7 +69,7 @@ export function ReadingView({
 
         let service = supabaseService
         if (!service) {
-          service = createSupabaseServiceInstance()
+          service = await createSupabaseServiceInstance()
         }
 
         if (!service) {
@@ -146,7 +159,7 @@ export function ReadingView({
     )
   }
 
-  const timeAgo = formatDistanceToNow(new Date(story.created_at), { addSuffix: true })
+  const timeAgo = story ? formatTimeAgo(story.created_at) : ''
 
   // Debug logging for HTML content
   React.useEffect(() => {
@@ -160,17 +173,13 @@ export function ReadingView({
         contentLength: story.content?.length || 0
       })
       
-      console.log('[ReadingView] Raw html_content:', story.html_content)
-      console.log('[ReadingView] Raw content:', story.content)
-      
       const processedContent = processStoryContent(story)
-      console.log('[ReadingView] Processed content:', processedContent)
-      console.log('[ReadingView] Processed content length:', processedContent.length)
+      console.log('[ReadingView] Enhanced content processed for optimal reading experience')
     }
   }, [story])
 
   const handleShareClick = async () => {
-    if (story.url) {
+    if (story?.url) {
       if (window.electronAPI) {
         // Open in external browser via Electron
         window.electronAPI.openExternal(story.url)
@@ -181,8 +190,382 @@ export function ReadingView({
     }
   }
 
+  /**
+   * Handle rating change locally (immediate UI update)
+   */
+  const handleRatingChange = (newRating: number) => {
+    const validRating = Math.min(10, Math.max(0, Math.round(newRating * 10) / 10))
+    setCurrentRating(validRating)
+    setPendingRating(validRating)
+  }
+
+  /**
+   * Debounced effect to save rating to Supabase after 1 second of inactivity
+   */
+  useEffect(() => {
+    if (pendingRating === null) return
+
+    const timeoutId = setTimeout(async () => {
+      setIsUpdatingRating(true)
+      
+      try {
+        const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+        const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+        let service = supabaseService
+        if (!service) {
+          service = await createSupabaseServiceInstance()
+        }
+
+        if (!service) {
+          console.error('Supabase service not available')
+          return
+        }
+
+        service.setUserId(userId)
+        const result = await service.updateStoryRating(storyId, pendingRating)
+
+        if (result.error) {
+          console.error('Error updating story rating:', result.error)
+          // Revert rating on error
+          setCurrentRating(story?.rating || 0)
+        } else {
+          console.log('Story rating updated successfully:', pendingRating)
+        }
+      } catch (err) {
+        console.error('Error updating story rating:', err)
+        // Revert rating on error
+        setCurrentRating(story?.rating || 0)
+      } finally {
+        setIsUpdatingRating(false)
+        setPendingRating(null)
+      }
+    }, 1000) // 1 second debounce
+
+    // Cleanup timeout if component unmounts or pendingRating changes
+    return () => clearTimeout(timeoutId)
+  }, [pendingRating, storyId, story?.rating])
+
   return (
     <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50">
+      {/* Enhanced CSS Styles for Beautiful Reading Experience */}
+      <style dangerouslySetInnerHTML={{__html: `
+        /* Enhanced Typography Styles */
+        .reading-content :global(.story-h1) {
+          font-size: 2.25rem;
+          font-weight: 700;
+          line-height: 1.2;
+          margin: 2rem 0 1.5rem 0;
+          color: rgb(17 24 39);
+        }
+        
+        .dark .reading-content :global(.story-h1) {
+          color: rgb(249 250 251);
+        }
+        
+        .reading-content :global(.story-h2) {
+          font-size: 1.875rem;
+          font-weight: 600;
+          line-height: 1.3;
+          margin: 1.75rem 0 1.25rem 0;
+          color: rgb(31 41 55);
+        }
+        
+        .dark .reading-content :global(.story-h2) {
+          color: rgb(243 244 246);
+        }
+        
+        .reading-content :global(.story-h3) {
+          font-size: 1.5rem;
+          font-weight: 600;
+          line-height: 1.4;
+          margin: 1.5rem 0 1rem 0;
+          color: rgb(55 65 81);
+        }
+        
+        .dark .reading-content :global(.story-h3) {
+          color: rgb(229 231 235);
+        }
+        
+        .reading-content :global(.story-h4) {
+          font-size: 1.25rem;
+          font-weight: 600;
+          line-height: 1.4;
+          margin: 1.25rem 0 0.75rem 0;
+          color: rgb(75 85 99);
+        }
+        
+        .dark .reading-content :global(.story-h4) {
+          color: rgb(209 213 219);
+        }
+        
+        .reading-content :global(.story-h5) {
+          font-size: 1.125rem;
+          font-weight: 600;
+          line-height: 1.5;
+          margin: 1rem 0 0.5rem 0;
+          color: rgb(107 114 128);
+        }
+        
+        .dark .reading-content :global(.story-h5) {
+          color: rgb(156 163 175);
+        }
+        
+        .reading-content :global(.story-h6) {
+          font-size: 1rem;
+          font-weight: 600;
+          line-height: 1.5;
+          margin: 1rem 0 0.5rem 0;
+          color: rgb(107 114 128);
+        }
+        
+        .dark .reading-content :global(.story-h6) {
+          color: rgb(156 163 175);
+        }
+        
+        /* Enhanced Paragraph Styles */
+        .reading-content :global(.story-paragraph) {
+          margin: 1.25rem 0;
+          line-height: 1.7;
+          color: rgb(55 65 81);
+        }
+        
+        .dark .reading-content :global(.story-paragraph) {
+          color: rgb(209 213 219);
+        }
+        
+        /* Enhanced Line Break Styles */
+        .reading-content :global(.story-line-break) {
+          display: block;
+          margin: 0.5rem 0;
+          height: 1.2em;
+        }
+        
+        .reading-content :global(br) {
+          display: block;
+          margin: 0.5rem 0;
+          height: 1.2em;
+        }
+        
+        /* Enhanced Text Formatting */
+        .reading-content :global(.story-bold) {
+          font-weight: 600;
+          color: rgb(17 24 39);
+        }
+        
+        .dark .reading-content :global(.story-bold) {
+          color: rgb(249 250 251);
+        }
+        
+        .reading-content :global(.story-italic) {
+          font-style: italic;
+          color: rgb(75 85 99);
+        }
+        
+        .dark .reading-content :global(.story-italic) {
+          color: rgb(156 163 175);
+        }
+        
+        /* Enhanced Link Styles */
+        .reading-content :global(.story-link) {
+          color: rgb(59 130 246);
+          text-decoration: underline;
+          text-decoration-color: rgba(59, 130, 246, 0.3);
+          text-underline-offset: 2px;
+          transition: all 0.2s ease;
+        }
+        
+        .reading-content :global(.story-link:hover) {
+          color: rgb(37 99 235);
+          text-decoration-color: rgb(37 99 235);
+        }
+        
+        .dark .reading-content :global(.story-link) {
+          color: rgb(96 165 250);
+        }
+        
+        .dark .reading-content :global(.story-link:hover) {
+          color: rgb(147 197 253);
+        }
+        
+        /* Enhanced List Styles */
+        .reading-content :global(.story-list) {
+          margin: 1.5rem 0;
+          padding-left: 1.5rem;
+        }
+        
+        .reading-content :global(.story-list-item) {
+          margin: 0.5rem 0;
+          line-height: 1.6;
+          color: rgb(55 65 81);
+        }
+        
+        .dark .reading-content :global(.story-list-item) {
+          color: rgb(209 213 219);
+        }
+        
+        /* Enhanced Blockquote Styles */
+        .reading-content :global(.story-blockquote) {
+          border-left: 4px solid rgb(59 130 246);
+          padding: 1rem 1.5rem;
+          margin: 2rem 0;
+          background: rgb(248 250 252);
+          font-style: italic;
+          color: rgb(75 85 99);
+          border-radius: 0 0.5rem 0.5rem 0;
+        }
+        
+        .dark .reading-content :global(.story-blockquote) {
+          background: rgb(17 24 39);
+          color: rgb(156 163 175);
+          border-left-color: rgb(96 165 250);
+        }
+        
+        /* Enhanced Code Styles */
+        .reading-content :global(.story-code-inline) {
+          background: rgb(243 244 246);
+          color: rgb(220 38 127);
+          padding: 0.125rem 0.375rem;
+          border-radius: 0.25rem;
+          font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+          font-size: 0.875em;
+        }
+        
+        .dark .reading-content :global(.story-code-inline) {
+          background: rgb(55 65 81);
+          color: rgb(251 146 60);
+        }
+        
+        .reading-content :global(.story-code-block) {
+          background: rgb(249 250 251);
+          border: 1px solid rgb(229 231 235);
+          padding: 1rem 1.5rem;
+          margin: 1.5rem 0;
+          border-radius: 0.5rem;
+          overflow-x: auto;
+          font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+          font-size: 0.875rem;
+          line-height: 1.5;
+        }
+        
+        .dark .reading-content :global(.story-code-block) {
+          background: rgb(31 41 55);
+          border-color: rgb(75 85 99);
+          color: rgb(209 213 219);
+        }
+        
+        /* Enhanced Image Styles */
+        .reading-content :global(.story-image-wrapper) {
+          margin: 2rem 0;
+          text-align: center;
+        }
+        
+        .reading-content :global(.story-image) {
+          max-width: 100%;
+          height: auto;
+          border-radius: 0.75rem;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .dark .reading-content :global(.story-image) {
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+        }
+        
+        .reading-content :global(.story-image-caption) {
+          margin-top: 0.75rem;
+          font-size: 0.875rem;
+          color: rgb(107 114 128);
+          font-style: italic;
+        }
+        
+        .dark .reading-content :global(.story-image-caption) {
+          color: rgb(156 163 175);
+        }
+        
+        /* Enhanced Content Container */
+        .reading-content :global(.story-content) {
+          margin: 1rem 0;
+        }
+        
+        /* Smooth Reading Flow */
+        .reading-content {
+          hyphens: auto;
+          word-wrap: break-word;
+          white-space: pre-line;
+        }
+        
+        /* Preserve whitespace in specific contexts */
+        .reading-content :global(pre),
+        .reading-content :global(.story-code-block) {
+          white-space: pre-wrap;
+        }
+        
+        /* Better paragraph spacing */
+        .reading-content :global(p + p) {
+          margin-top: 1.5rem;
+        }
+        
+        .reading-content :global(p:empty) {
+          margin: 1rem 0;
+          height: 1em;
+        }
+        
+        /* Enhanced Rating Slider Styles */
+        .slider-smooth {
+          transition: all 0.15s ease;
+        }
+        
+        .slider-smooth::-webkit-slider-thumb {
+          appearance: none;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: rgb(59 130 246);
+          cursor: pointer;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .dark .slider-smooth::-webkit-slider-thumb {
+          background: rgb(96 165 250);
+          border-color: rgb(17 24 39);
+        }
+        
+        .slider-smooth::-webkit-slider-thumb:hover {
+          transform: scale(1.1);
+        }
+        
+        .slider-smooth::-moz-range-thumb {
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: rgb(59 130 246);
+          cursor: pointer;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .dark .slider-smooth::-moz-range-thumb {
+          background: rgb(96 165 250);
+          border-color: rgb(17 24 39);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+          .reading-content :global(.story-h1) {
+            font-size: 1.875rem;
+          }
+          
+          .reading-content :global(.story-h2) {
+            font-size: 1.5rem;
+          }
+          
+          .reading-content :global(.story-h3) {
+            font-size: 1.25rem;
+          }
+                 }
+       `}} />
+
       {/* Reading Progress Bar */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-700 z-10">
         <div 
@@ -208,47 +591,77 @@ export function ReadingView({
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-4">
           {/* Navigation buttons */}
-          <button
-            onClick={() => onNavigate('prev')}
-            className="btn-ghost p-1"
-            aria-label="Previous story"
-          >
-            <ArrowLeftIcon className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={() => onNavigate('next')}
-            className="btn-ghost p-1"
-            aria-label="Next story"
-          >
-            <ArrowRightIcon className="w-4 h-4" />
-          </button>
-
-          {/* Bookmark button */}
-          <button
-            onClick={() => onBookmark(storyId)}
-            className="btn-ghost p-1"
-            aria-label={story.is_bookmarked ? 'Remove bookmark' : 'Bookmark story'}
-          >
-            {story.is_bookmarked ? (
-              <BookmarkSolid className="w-4 h-4 text-accent-light dark:text-accent-dark" />
-            ) : (
-              <BookmarkOutline className="w-4 h-4" />
-            )}
-          </button>
-
-          {/* Share button */}
-          {story.url && (
+          <div className="flex items-center space-x-2">
             <button
-              onClick={handleShareClick}
+              onClick={() => onNavigate('prev')}
               className="btn-ghost p-1"
-              aria-label="Open original article"
+              aria-label="Previous story"
             >
-              <ShareIcon className="w-4 h-4" />
+              <ArrowLeftIcon className="w-4 h-4" />
             </button>
-          )}
+            
+            <button
+              onClick={() => onNavigate('next')}
+              className="btn-ghost p-1"
+              aria-label="Next story"
+            >
+              <ArrowRightIcon className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Rating Slider */}
+          <div className="flex items-center space-x-2 min-w-32">
+            <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+              Rating:
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="0.1"
+              value={currentRating}
+              onChange={(e) => handleRatingChange(parseFloat(e.target.value))}
+              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 slider-smooth"
+              aria-label="Story rating"
+            />
+            <div className="flex items-center space-x-1 w-12">
+              <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                {currentRating.toFixed(1)}
+              </span>
+              {isUpdatingRating && (
+                <div className="w-2 h-2 bg-accent-light dark:bg-accent-dark rounded-full animate-pulse"></div>
+              )}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center space-x-2">
+            {/* Bookmark button */}
+            <button
+              onClick={() => onBookmark(storyId)}
+              className="btn-ghost p-1"
+              aria-label={story.is_bookmarked ? 'Remove bookmark' : 'Bookmark story'}
+            >
+              {story.is_bookmarked ? (
+                <BookmarkSolid className="w-4 h-4 text-accent-light dark:text-accent-dark" />
+              ) : (
+                <BookmarkOutline className="w-4 h-4" />
+              )}
+            </button>
+
+            {/* Share button */}
+            {story.url && (
+              <button
+                onClick={handleShareClick}
+                className="btn-ghost p-1"
+                aria-label="Open original article"
+              >
+                <ShareIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -299,7 +712,7 @@ export function ReadingView({
             </div>
           </header>
 
-          {/* Article Content */}
+          {/* Article Content with Enhanced Formatting */}
           <div 
             className="reading-content prose prose-lg dark:prose-invert max-w-none"
             dangerouslySetInnerHTML={{ __html: processStoryContent(story) }}

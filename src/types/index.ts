@@ -29,6 +29,7 @@ export interface Story {
   content_type: 'newsletter' | 'video'
   video_url?: string
   video_duration?: number // Minutes for videos
+  rating?: number // User rating from 0-10 with 1 decimal precision
 }
 
 // Filtered story type for UI components

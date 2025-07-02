@@ -23,6 +23,7 @@ create table public.stories (
   content_type text not null default 'newsletter'::text,
   video_url text null,
   video_duration integer null,
+  rating numeric null,
   constraint stories_pkey primary key (id),
   constraint stories_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete CASCADE,
   constraint stories_content_type_check check (

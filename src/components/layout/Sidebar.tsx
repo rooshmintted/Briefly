@@ -69,7 +69,7 @@ export function Sidebar() {
         {/* Smart Views Section */}
         <div className="mb-6">
           <h2 className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wide mb-3">
-            Smart Views
+                Smart Views
           </h2>
           <div className="space-y-1">
             {smartViews.map((view) => (

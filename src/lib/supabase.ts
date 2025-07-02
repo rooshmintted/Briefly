@@ -130,8 +130,7 @@ export class SupabaseService {
         const ascending = sort.direction === 'asc'
         query = query.order(sort.field, { ascending })
       } else {
-        // Default sort: importance desc, then created_at desc
-        query = query.order('importance_score', { ascending: false })
+        // Default sort: created_at desc (most recent first)
         query = query.order('created_at', { ascending: false })
       }
 
@@ -243,7 +242,6 @@ export class SupabaseService {
         const ascending = sort.direction === 'asc'
         query = query.order(sort.field, { ascending })
       } else {
-        query = query.order('importance_score', { ascending: false })
         query = query.order('created_at', { ascending: false })
       }
 
@@ -333,6 +331,41 @@ export class SupabaseService {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       console.error('Error in updateStoryBookmarkStatus:', err)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  /**
+   * Update story rating
+   */
+  async updateStoryRating(storyId: string, rating: number): Promise<{ success: boolean; error?: string }> {
+    if (!this.userId) {
+      return { success: false, error: 'User ID not set' }
+    }
+
+    try {
+      // Ensure rating is within valid range and has proper precision
+      const validRating = Math.min(10, Math.max(0, Math.round(rating * 10) / 10))
+
+      const { error } = await this.supabase
+        .from('stories')
+        .update({
+          rating: validRating,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', storyId)
+        .eq('user_id', this.userId)
+
+      if (error) {
+        console.error('Error updating story rating:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in updateStoryRating:', err)
       return { success: false, error: errorMessage }
     }
   }
