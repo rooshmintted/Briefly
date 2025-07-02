@@ -15,7 +15,8 @@ import {
   SyncStatus,
   ReadingPreferences,
   SmartView,
-  DEFAULT_SMART_VIEWS
+  DEFAULT_SMART_VIEWS,
+  Highlight
 } from '@/types'
 import { parseTimestamp } from '@/lib/dateUtils'
 
@@ -67,9 +68,26 @@ interface AppStore extends AppState, StoryFeedState {
   // Story management actions
   loadStories: () => void
   refreshStories: () => void
-  selectStory: (storyId: string | null) => void
+  selectStory: (storyId: string | null, highlightId?: string) => void
   markStoryAsRead: (storyId: string, isRead: boolean) => void
   toggleStoryBookmark: (storyId: string) => void
+  
+  // Selected highlight for scrolling
+  selectedHighlightId: string | null
+  
+  // Highlights management
+  highlights: Record<string, Highlight[]> // Key is story ID
+  loadStoryHighlights: (storyId: string) => Promise<void>
+  createHighlight: (storyId: string, highlightData: {
+    highlightedText: string
+    startOffset: number
+    endOffset: number
+    contextBefore?: string
+    contextAfter?: string
+    color?: string
+  }) => Promise<void>
+  deleteHighlight: (highlightId: string, storyId: string) => Promise<void>
+  loadAllHighlights: () => Promise<void>
   
   // Filter and search actions
   setFilters: (filters: Partial<FilterOptions>) => void
@@ -125,6 +143,8 @@ export const useAppStore = create<AppStore>()(
       
       smartViews: DEFAULT_SMART_VIEWS,
       activeSmartView: null,
+      highlights: {},
+      selectedHighlightId: null,
 
       // Story management actions
       loadStories: () => {
@@ -238,9 +258,10 @@ export const useAppStore = create<AppStore>()(
         loadStories()
       },
 
-      selectStory: (storyId) => {
+      selectStory: (storyId, highlightId) => {
         set({ 
           selectedStoryId: storyId,
+          selectedHighlightId: highlightId || null,
           currentView: storyId ? 'reading' : 'feed'
         })
       },
@@ -355,6 +376,163 @@ export const useAppStore = create<AppStore>()(
         })
       },
 
+      // Highlights management actions
+      loadStoryHighlights: async (storyId: string) => {
+        try {
+          const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+          const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
+
+          if (!service) {
+            console.error('Supabase service not available for loading highlights')
+            return
+          }
+
+          let currentUserId = userId
+          if (!currentUserId || currentUserId === 'dev-user') {
+            try {
+              const storedUserId = await window.electronAPI?.getAppSetting('userId')
+              if (storedUserId) {
+                currentUserId = storedUserId
+              }
+            } catch (error) {
+              console.warn('Could not retrieve stored user ID for highlights:', error)
+            }
+          }
+
+          service.setUserId(currentUserId)
+          const result = await service.getStoryHighlights(storyId)
+
+          if (result.error) {
+            console.error('Error loading story highlights:', result.error)
+            return
+          }
+
+          set((state) => ({
+            highlights: {
+              ...state.highlights,
+              [storyId]: result.highlights
+            }
+          }))
+        } catch (error) {
+          console.error('Error in loadStoryHighlights:', error)
+        }
+      },
+
+      createHighlight: async (storyId: string, highlightData) => {
+        try {
+          const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+          const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
+
+          if (!service) {
+            console.error('Supabase service not available for creating highlight')
+            return
+          }
+
+          let currentUserId = userId
+          if (!currentUserId || currentUserId === 'dev-user') {
+            try {
+              const storedUserId = await window.electronAPI?.getAppSetting('userId')
+              if (storedUserId) {
+                currentUserId = storedUserId
+              }
+            } catch (error) {
+              console.warn('Could not retrieve stored user ID for highlight creation:', error)
+            }
+          }
+
+          service.setUserId(currentUserId)
+          const result = await service.createHighlight({ storyId, ...highlightData })
+
+          if (result.error) {
+            console.error('Error creating highlight:', result.error)
+            return
+          }
+
+          if (result.highlight) {
+            set((state) => ({
+              highlights: {
+                ...state.highlights,
+                [storyId]: [...(state.highlights[storyId] || []), result.highlight!]
+              }
+            }))
+          }
+        } catch (error) {
+          console.error('Error in createHighlight:', error)
+        }
+      },
+
+      deleteHighlight: async (highlightId: string, storyId: string) => {
+        try {
+          const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+          const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
+
+          if (!service) {
+            console.error('Supabase service not available for deleting highlight')
+            return
+          }
+
+          let currentUserId = userId
+          if (!currentUserId || currentUserId === 'dev-user') {
+            try {
+              const storedUserId = await window.electronAPI?.getAppSetting('userId')
+              if (storedUserId) {
+                currentUserId = storedUserId
+              }
+            } catch (error) {
+              console.warn('Could not retrieve stored user ID for highlight deletion:', error)
+            }
+          }
+
+          service.setUserId(currentUserId)
+          const result = await service.deleteHighlight(highlightId)
+
+          if (result.error) {
+            console.error('Error deleting highlight:', result.error)
+            return
+          }
+
+          set((state) => ({
+            highlights: {
+              ...state.highlights,
+              [storyId]: (state.highlights[storyId] || []).filter(h => h.id !== highlightId)
+            }
+          }))
+        } catch (error) {
+          console.error('Error in deleteHighlight:', error)
+        }
+      },
+
+      loadAllHighlights: async () => {
+        try {
+          const state = get()
+          const storyIds = state.stories.map(story => story.id)
+          
+          // Load highlights for all stories that don't already have highlights loaded
+          const loadPromises = storyIds
+            .filter(storyId => !state.highlights[storyId])
+            .map(storyId => state.loadStoryHighlights(storyId))
+          
+          await Promise.all(loadPromises)
+        } catch (error) {
+          console.error('Error in loadAllHighlights:', error)
+        }
+      },
+
       // Filter and search actions
       setFilters: (newFilters) => {
         set((state) => {
@@ -390,19 +568,28 @@ export const useAppStore = create<AppStore>()(
       applySmartView: (view) => {
         console.log('[AppStore] Applying smart view:', view.name, view.id)
         console.log('[AppStore] Smart view filters:', view.filters)
+        
         set((state) => {
+          // For highlights view, we still apply it as a smart view but let StoryFeed handle the display
           const updatedFilters = view.filters
           const updatedSort = view.sort
-          const filteredStories = applyFiltersAndSearch(state.stories, updatedFilters, '')
-          console.log('[AppStore] Stories after applying smart view:', {
-            totalStories: state.stories.length,
-            filteredStories: filteredStories.length,
-            viewName: view.name
-          })
+          
+          // For non-highlights views, filter stories normally
+          let filteredStories = state.filteredStories
+          if (view.id !== 'highlights') {
+            filteredStories = applyFiltersAndSearch(state.stories, updatedFilters, '')
+            console.log('[AppStore] Stories after applying smart view:', {
+              totalStories: state.stories.length,
+              filteredStories: filteredStories.length,
+              viewName: view.name
+            })
+          }
+          
           return {
             filters: updatedFilters,
             sort: updatedSort,
             activeSmartView: view.id,
+            currentView: 'feed',
             searchQuery: '',
             filteredStories
           }
@@ -470,11 +657,18 @@ export const useAppStore = create<AppStore>()(
       name: 'briefly-app-store',
       partialize: (state) => ({
         settings: state.settings,
-        smartViews: state.smartViews,
         sidebarVisible: state.sidebarVisible,
         filters: state.filters,
         sort: state.sort
-      })
+        // Don't persist smartViews - always use DEFAULT_SMART_VIEWS to ensure new views are included
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Always ensure we have the latest smart views including highlights
+          state.smartViews = DEFAULT_SMART_VIEWS
+          console.log('[Store] Rehydrated with updated smart views:', state.smartViews.map(v => v.id))
+        }
+      }
     }
   )
 )

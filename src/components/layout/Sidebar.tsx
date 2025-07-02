@@ -10,7 +10,8 @@ import {
   BookmarkIcon,
   CalendarDaysIcon,
   FunnelIcon,
-  SparklesIcon
+  SparklesIcon,
+  PencilIcon
 } from '@heroicons/react/24/outline'
 import { useAppStore } from '@/stores/appStore'
 import { SmartView } from '@/types'
@@ -25,7 +26,7 @@ export function Sidebar() {
     activeSmartView, 
     applySmartView, 
     filters,
-    setFilters 
+    setFilters
   } = useAppStore()
 
   const handleSmartViewClick = (view: SmartView) => {
@@ -42,6 +43,8 @@ export function Sidebar() {
         return <SparklesIcon className="w-4 h-4" />
       case 'bookmarks':
         return <BookmarkIcon className="w-4 h-4" />
+      case 'highlights':
+        return <PencilIcon className="w-4 h-4" />
       default:
         return <StarIcon className="w-4 h-4" />
     }

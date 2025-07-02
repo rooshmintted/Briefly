@@ -153,10 +153,35 @@ export interface StoryFeedProps {
 
 export interface ReadingViewProps {
   storyId: string
+  highlightId?: string // Optional highlight to scroll to
   onMarkAsRead: (storyId: string) => void
   onBookmark: (storyId: string) => void
   onNavigate: (direction: 'prev' | 'next') => void
   onClose: () => void
+}
+
+// Highlights feature types
+export interface Highlight {
+  id: string
+  user_id: string
+  story_id: string
+  highlighted_text: string
+  start_offset: number
+  end_offset: number
+  context_before?: string
+  context_after?: string
+  color: 'yellow' | 'blue' | 'green' | 'pink' | 'purple'
+  created_at: string
+  updated_at: string
+}
+
+export interface TextSelection {
+  text: string
+  startOffset: number
+  endOffset: number
+  contextBefore: string
+  contextAfter: string
+  boundingRect: DOMRect
 }
 
 export interface SearchBarProps {
@@ -297,6 +322,23 @@ export const DEFAULT_SMART_VIEWS: SmartView[] = [
       importanceMax: 10,
       dateRange: {},
       bookmarkedOnly: true
+    },
+    sort: { field: 'created_at', direction: 'desc' },
+    isDefault: true
+  },
+  {
+    id: 'highlights',
+    name: 'Highlights',
+    description: 'Your highlighted text across all stories',
+    filters: {
+      readStatus: 'all',
+      contentTypes: [],
+      publications: [],
+      categories: [],
+      importanceMin: 0,
+      importanceMax: 10,
+      dateRange: {},
+      bookmarkedOnly: false
     },
     sort: { field: 'created_at', direction: 'desc' },
     isDefault: true

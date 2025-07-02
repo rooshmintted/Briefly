@@ -25,7 +25,9 @@ export function Header() {
     toggleSidebar,
     isOnline,
     syncStatus,
-    sidebarVisible
+    sidebarVisible,
+    refreshStories,
+    isLoading
   } = useAppStore()
 
   const handleSearchClick = () => {
@@ -41,8 +43,8 @@ export function Header() {
   }
 
   const handleSyncClick = () => {
-    // TODO: Trigger manual sync
-    console.log('Manual sync triggered')
+    console.log('Refresh stories triggered from header')
+    refreshStories()
   }
 
   return (
@@ -107,21 +109,22 @@ export function Header() {
           )}
         </div>
 
-        {/* Sync Status */}
+        {/* Refresh Stories Button */}
         <button
           onClick={handleSyncClick}
-          disabled={syncStatus.is_syncing}
+          disabled={isLoading}
           className={clsx(
             'btn-ghost p-1',
-            syncStatus.is_syncing && 'opacity-50 cursor-not-allowed'
+            isLoading && 'opacity-50 cursor-not-allowed'
           )}
-          aria-label="Sync stories"
+          aria-label="Refresh stories"
+          title="Reload stories from Supabase"
         >
           <ArrowPathIcon 
             className={clsx(
               'w-4 h-4',
-              syncStatus.is_syncing && 'animate-spin',
-              syncStatus.last_error ? 'text-red-500' : 'text-text-secondary-light dark:text-text-secondary-dark'
+              isLoading && 'animate-spin',
+              'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
             )} 
           />
         </button>

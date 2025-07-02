@@ -52,3 +52,44 @@ create index IF not exists idx_stories_publication on public.stories using btree
 create index IF not exists idx_stories_read_time on public.stories using btree (user_id, estimated_read_time) TABLESPACE pg_default;
 
 create index IF not exists idx_stories_content_type on public.stories using btree (user_id, content_type) TABLESPACE pg_default;
+
+
+create table public.highlights (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  user_id uuid not null,
+  story_id uuid not null,
+  highlighted_text text not null,
+  start_offset integer not null,
+  end_offset integer not null,
+  context_before text null,
+  context_after text null,
+  color text not null default 'yellow'::text,
+  created_at timestamp with time zone null default now(),
+  updated_at timestamp with time zone null default now(),
+  constraint highlights_pkey primary key (id),
+  constraint unique_user_story_position unique (user_id, story_id, start_offset, end_offset),
+  constraint highlights_story_id_fkey foreign KEY (story_id) references stories (id) on delete CASCADE,
+  constraint highlights_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete CASCADE,
+  constraint highlights_color_check check (
+    (
+      color = any (
+        array[
+          'yellow'::text,
+          'blue'::text,
+          'green'::text,
+          'pink'::text,
+          'purple'::text
+        ]
+      )
+    )
+  ),
+  constraint highlights_offsets_check check ((end_offset > start_offset))
+) TABLESPACE pg_default;
+
+create index IF not exists idx_highlights_user_id on public.highlights using btree (user_id) TABLESPACE pg_default;
+
+create index IF not exists idx_highlights_story_id on public.highlights using btree (story_id) TABLESPACE pg_default;
+
+create index IF not exists idx_highlights_user_story on public.highlights using btree (user_id, story_id) TABLESPACE pg_default;
+
+create index IF not exists idx_highlights_created_at on public.highlights using btree (created_at desc) TABLESPACE pg_default;

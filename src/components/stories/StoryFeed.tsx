@@ -6,12 +6,13 @@
 import React, { useEffect } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { StoryFeedProps } from '@/types'
-import { StoryCard } from './StoryCard'
+import { HighlightsFeed } from '@/components/highlights/HighlightsFeed'
+import { StoryCard } from '@/components/stories/StoryCard'
 
 /**
  * Main story feed component
  */
-export function StoryFeed({ filters, sort, showUnreadOnly, onStorySelect }: StoryFeedProps) {
+export function StoryFeed() {
   const { 
     filteredStories, 
     isLoading, 
@@ -21,6 +22,9 @@ export function StoryFeed({ filters, sort, showUnreadOnly, onStorySelect }: Stor
     activeSmartView,
     stories
   } = useAppStore()
+
+  // Check if we should show highlights instead of stories
+  const showHighlights = activeSmartView === 'highlights'
 
   console.log('[StoryFeed] Rendered with:', {
     filteredStoriesCount: filteredStories.length,
@@ -77,6 +81,19 @@ export function StoryFeed({ filters, sort, showUnreadOnly, onStorySelect }: Stor
     )
   }
 
+  // If highlights view is active, render highlights instead of stories
+  if (showHighlights) {
+    return (
+      <HighlightsFeed
+        onHighlightSelect={(storyId: string, highlightId: string) => {
+          // Navigate to the story and pass highlight ID for scrolling
+          const { selectStory } = useAppStore.getState()
+          selectStory(storyId, highlightId)
+        }}
+      />
+    )
+  }
+
   if (filteredStories.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -99,7 +116,11 @@ export function StoryFeed({ filters, sort, showUnreadOnly, onStorySelect }: Stor
           <StoryCard
             key={story.id}
             story={story}
-            onClick={() => onStorySelect(story.id)}
+            onClick={() => {
+              // Clear any selected highlight when opening a regular story
+              const { selectStory } = useAppStore.getState()
+              selectStory(story.id)
+            }}
           />
         ))}
 

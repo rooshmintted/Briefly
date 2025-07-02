@@ -4,7 +4,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { Story, FilterOptions, SortOptions } from '@/types'
+import { Story, FilterOptions, SortOptions, Highlight } from '@/types'
 
 export class SupabaseService {
   private supabase: SupabaseClient
@@ -366,6 +366,113 @@ export class SupabaseService {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       console.error('Error in updateStoryRating:', err)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  /**
+   * Create a new highlight for a story
+   */
+  async createHighlight(highlightData: {
+    storyId: string
+    highlightedText: string
+    startOffset: number
+    endOffset: number
+    contextBefore?: string
+    contextAfter?: string
+    color?: string
+  }): Promise<{ highlight: Highlight | null; error?: string }> {
+    if (!this.userId) {
+      return { highlight: null, error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('highlights')
+        .insert({
+          user_id: this.userId,
+          story_id: highlightData.storyId,
+          highlighted_text: highlightData.highlightedText,
+          start_offset: highlightData.startOffset,
+          end_offset: highlightData.endOffset,
+          context_before: highlightData.contextBefore,
+          context_after: highlightData.contextAfter,
+          color: highlightData.color || 'yellow',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error creating highlight:', error)
+        return { highlight: null, error: error.message }
+      }
+
+      return { highlight: data }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in createHighlight:', err)
+      return { highlight: null, error: errorMessage }
+    }
+  }
+
+  /**
+   * Get all highlights for a story
+   */
+  async getStoryHighlights(storyId: string): Promise<{ highlights: Highlight[]; error?: string }> {
+    if (!this.userId) {
+      return { highlights: [], error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('highlights')
+        .select('*')
+        .eq('user_id', this.userId)
+        .eq('story_id', storyId)
+        .order('start_offset', { ascending: true })
+
+      if (error) {
+        console.error('Error loading highlights:', error)
+        return { highlights: [], error: error.message }
+      }
+
+      return { highlights: data || [] }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in getStoryHighlights:', err)
+      return { highlights: [], error: errorMessage }
+    }
+  }
+
+  /**
+   * Delete a highlight
+   */
+  async deleteHighlight(highlightId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.userId) {
+      return { success: false, error: 'User ID not set' }
+    }
+
+    try {
+      const { error } = await this.supabase
+        .from('highlights')
+        .delete()
+        .eq('id', highlightId)
+        .eq('user_id', this.userId)
+
+      if (error) {
+        console.error('Error deleting highlight:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in deleteHighlight:', err)
       return { success: false, error: errorMessage }
     }
   }

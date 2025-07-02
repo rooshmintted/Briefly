@@ -81,15 +81,13 @@ export function StoryCard({ story, onClick }: StoryCardProps) {
           <span className="font-medium">{story.publication_name}</span>
           <span>•</span>
           <span>{timeAgo}</span>
-          {story.estimated_read_time && (
-            <>
-              <span>•</span>
-              <div className="flex items-center space-x-1">
-                <ClockIcon className="w-3 h-3" />
-                <span>{story.estimated_read_time} min</span>
-              </div>
-            </>
-          )}
+          <>
+            <span>•</span>
+            <div className="flex items-center space-x-1">
+              <ClockIcon className="w-3 h-3" />
+              <span>{story.estimated_read_time || 6} min</span>
+            </div>
+          </>
         </div>
         
         {/* Importance stars */}

@@ -11,6 +11,7 @@ import { StoryFeed } from '@/components/stories/StoryFeed'
 import { ReadingView } from '@/components/reading/ReadingView'
 import { SearchView } from '@/components/search/SearchView'
 import { SettingsView } from '@/components/settings/SettingsView'
+import { HighlightsFeed } from '@/components/highlights/HighlightsFeed'
 import { useTheme } from '@/hooks/useTheme'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useSyncManager } from '@/hooks/useSyncManager'
@@ -19,7 +20,7 @@ import { useSyncManager } from '@/hooks/useSyncManager'
  * Main application component
  */
 function App() {
-  const { currentView, selectedStoryId, settings } = useAppStore()
+  const { currentView, selectedStoryId, selectedHighlightId, settings } = useAppStore()
   
   // Custom hooks for app functionality
   useTheme(settings.reading.theme)
@@ -86,6 +87,7 @@ function App() {
         return selectedStoryId ? (
           <ReadingView 
             storyId={selectedStoryId}
+            highlightId={selectedHighlightId || undefined}
             onMarkAsRead={(id: string) => useAppStore.getState().markStoryAsRead(id, true)}
             onBookmark={(id: string) => useAppStore.getState().toggleStoryBookmark(id)}
             onNavigate={(direction: 'prev' | 'next') => {
@@ -104,14 +106,7 @@ function App() {
 
       case 'feed':
       default:
-        return (
-          <StoryFeed
-            filters={useAppStore.getState().filters}
-            sort={useAppStore.getState().sort}
-            showUnreadOnly={false}
-            onStorySelect={(id) => useAppStore.getState().selectStory(id)}
-          />
-        )
+        return <StoryFeed />
     }
   }
 

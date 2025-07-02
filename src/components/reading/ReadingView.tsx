@@ -4,7 +4,7 @@
  * Enhanced with beautiful typography and formatting for optimal reading experience
  */
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { 
   XMarkIcon,
   BookmarkIcon as BookmarkOutline,
@@ -15,23 +15,26 @@ import {
 import { 
   BookmarkIcon as BookmarkSolid 
 } from '@heroicons/react/24/solid'
-import { ReadingViewProps, Story } from '@/types'
+import { ReadingViewProps, Story, TextSelection } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { clsx } from 'clsx'
 import { formatTimeAgo } from '@/lib/dateUtils'
 import { processStoryContent } from '@/lib/htmlUtils'
+import { extractTextSelection, applyHighlightsToContent, debounce, scrollToHighlight } from '@/lib/highlightUtils'
+import { HighlightPopup } from './HighlightPopup'
 
 /**
  * Full-screen reading view component with enhanced typography
  */
 export function ReadingView({ 
   storyId, 
+  highlightId,
   onMarkAsRead, 
   onBookmark, 
   onNavigate, 
   onClose 
 }: ReadingViewProps) {
-  const { stories, settings } = useAppStore()
+  const { stories, settings, highlights, loadStoryHighlights, createHighlight } = useAppStore()
   const [readingProgress, setReadingProgress] = useState(0)
   const [loadedStory, setLoadedStory] = useState<Story | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -39,6 +42,11 @@ export function ReadingView({
   const [currentRating, setCurrentRating] = useState<number>(0)
   const [isUpdatingRating, setIsUpdatingRating] = useState(false)
   const [pendingRating, setPendingRating] = useState<number | null>(null)
+  
+  // Highlights state
+  const [currentSelection, setCurrentSelection] = useState<TextSelection | null>(null)
+  const [showHighlightPopup, setShowHighlightPopup] = useState(false)
+  const readingContentRef = useRef<HTMLDivElement>(null)
   
   // Try to find story in current stories array first
   const story = stories.find(s => s.id === storyId) || loadedStory
@@ -245,6 +253,97 @@ export function ReadingView({
     // Cleanup timeout if component unmounts or pendingRating changes
     return () => clearTimeout(timeoutId)
   }, [pendingRating, storyId, story?.rating])
+
+  // Load highlights when story changes
+  useEffect(() => {
+    if (story && !highlights[storyId]) {
+      loadStoryHighlights(storyId)
+    }
+  }, [story, storyId, highlights, loadStoryHighlights])
+
+  // Scroll to specific highlight when highlights are loaded and highlightId is provided
+  useEffect(() => {
+    if (highlightId && highlights[storyId] && readingContentRef.current) {
+      // Small delay to ensure the content is rendered with highlights
+      const timer = setTimeout(() => {
+        const success = scrollToHighlight(highlightId, readingContentRef.current!)
+        if (success) {
+          console.log(`Scrolled to highlight: ${highlightId}`)
+        }
+      }, 500) // 500ms delay to ensure DOM is updated
+
+      return () => clearTimeout(timer)
+    }
+  }, [highlightId, highlights, storyId])
+
+  // Text selection detection with debounce
+  useEffect(() => {
+    const contentElement = readingContentRef.current
+    if (!contentElement) return
+
+    const handleSelectionChange = debounce(() => {
+      const selection = extractTextSelection(contentElement)
+      
+      if (selection) {
+        setCurrentSelection(selection)
+        setShowHighlightPopup(true)
+      } else {
+        setCurrentSelection(null)
+        setShowHighlightPopup(false)
+      }
+    }, 200)
+
+    const handleMouseUp = () => {
+      setTimeout(handleSelectionChange, 10) // Small delay to ensure selection is complete
+    }
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      // Only trigger on selection keys
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Shift'].includes(event.key)) {
+        setTimeout(handleSelectionChange, 10)
+      }
+    }
+
+    contentElement.addEventListener('mouseup', handleMouseUp)
+    contentElement.addEventListener('keyup', handleKeyUp)
+
+    return () => {
+      contentElement.removeEventListener('mouseup', handleMouseUp)
+      contentElement.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [story])
+
+  // Handle highlight creation
+  const handleCreateHighlight = async () => {
+    if (!currentSelection || !story) return
+
+    try {
+      await createHighlight(storyId, {
+        highlightedText: currentSelection.text,
+        startOffset: currentSelection.startOffset,
+        endOffset: currentSelection.endOffset,
+        contextBefore: currentSelection.contextBefore,
+        contextAfter: currentSelection.contextAfter,
+        color: 'yellow'
+      })
+
+      // Clear selection and hide popup
+      setCurrentSelection(null)
+      setShowHighlightPopup(false)
+      
+      // Clear DOM selection
+      window.getSelection()?.removeAllRanges()
+    } catch (error) {
+      console.error('Error creating highlight:', error)
+    }
+  }
+
+  // Close highlight popup
+  const handleCloseHighlightPopup = () => {
+    setShowHighlightPopup(false)
+    setCurrentSelection(null)
+    window.getSelection()?.removeAllRanges()
+  }
 
   return (
     <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50">
@@ -550,6 +649,86 @@ export function ReadingView({
           border-color: rgb(17 24 39);
         }
 
+        /* Enhanced Highlight Styles */
+        .reading-content :global(mark[data-highlight-id]) {
+          background: rgba(255, 235, 59, 0.3);
+          border-radius: 2px;
+          padding: 0 2px;
+          transition: all 0.2s ease;
+          cursor: pointer;
+        }
+        
+        .reading-content :global(mark[data-highlight-id]:hover) {
+          background: rgba(255, 235, 59, 0.5);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .dark .reading-content :global(mark[data-highlight-id]) {
+          background: rgba(255, 235, 59, 0.2);
+          color: inherit;
+        }
+        
+        .dark .reading-content :global(mark[data-highlight-id]:hover) {
+          background: rgba(255, 235, 59, 0.3);
+        }
+        
+        /* Blue highlights */
+        .reading-content :global(mark.bg-blue-200) {
+          background: rgba(59, 130, 246, 0.3);
+        }
+        
+        .dark .reading-content :global(mark.bg-blue-800\\/30) {
+          background: rgba(59, 130, 246, 0.2);
+        }
+        
+        /* Green highlights */
+        .reading-content :global(mark.bg-green-200) {
+          background: rgba(34, 197, 94, 0.3);
+        }
+        
+        .dark .reading-content :global(mark.bg-green-800\\/30) {
+          background: rgba(34, 197, 94, 0.2);
+        }
+        
+        /* Pink highlights */
+        .reading-content :global(mark.bg-pink-200) {
+          background: rgba(236, 72, 153, 0.3);
+        }
+        
+        .dark .reading-content :global(mark.bg-pink-800\\/30) {
+          background: rgba(236, 72, 153, 0.2);
+        }
+        
+        /* Purple highlights */
+        .reading-content :global(mark.bg-purple-200) {
+          background: rgba(147, 51, 234, 0.3);
+        }
+        
+        .dark .reading-content :global(mark.bg-purple-800\\/30) {
+          background: rgba(147, 51, 234, 0.2);
+        }
+        
+        /* Highlight focus animation for scrolling */
+        .reading-content :global(mark.highlight-focus) {
+          animation: highlightPulse 2s ease-in-out;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+        
+        .dark .reading-content :global(mark.highlight-focus) {
+          box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3);
+        }
+        
+        @keyframes highlightPulse {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+          }
+          50% {
+            transform: scale(1.02);
+            box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.2);
+          }
+        }
+
         /* Responsive adjustments */
         @media (max-width: 768px) {
           .reading-content :global(.story-h1) {
@@ -587,7 +766,7 @@ export function ReadingView({
           
           <div className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
             {story.publication_name} • {timeAgo}
-            {story.estimated_read_time && ` • ${story.estimated_read_time} min read`}
+            {` • ${story.estimated_read_time || 6} min read`}
           </div>
         </div>
 
@@ -714,8 +893,14 @@ export function ReadingView({
 
           {/* Article Content with Enhanced Formatting */}
           <div 
+            ref={readingContentRef}
             className="reading-content prose prose-lg dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: processStoryContent(story) }}
+            dangerouslySetInnerHTML={{ 
+              __html: applyHighlightsToContent(
+                processStoryContent(story), 
+                highlights[storyId] || []
+              ) 
+            }}
           />
 
           {/* Article Footer */}
@@ -737,6 +922,14 @@ export function ReadingView({
           </footer>
         </div>
       </div>
+
+      {/* Highlight Popup */}
+      <HighlightPopup
+        selection={currentSelection}
+        visible={showHighlightPopup}
+        onHighlight={handleCreateHighlight}
+        onClose={handleCloseHighlightPopup}
+      />
     </div>
   )
 } 
