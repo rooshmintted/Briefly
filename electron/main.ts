@@ -80,6 +80,25 @@ class BrieflyApp {
         shell.openExternal(url)
         return { action: 'deny' }
       })
+
+      // Handle permission requests for media content
+      contents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+        const allowedPermissions = ['media', 'audioCapture', 'videoCapture', 'fullscreen']
+        
+        if (allowedPermissions.includes(permission)) {
+          callback(true)
+        } else {
+          callback(false)
+        }
+      })
+
+      // Set additional headers for YouTube compatibility
+      contents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+        if (details.url.includes('youtube.com') || details.url.includes('youtubei.googleapis.com')) {
+          details.requestHeaders['Referer'] = 'https://www.youtube.com/'
+        }
+        callback({ requestHeaders: details.requestHeaders })
+      })
     })
   }
 
@@ -106,11 +125,18 @@ class BrieflyApp {
       show: false,
       titleBarStyle: 'hiddenInset',
       webPreferences: {
-        nodeIntegration: true,
+        nodeIntegration: false,
         contextIsolation: true,
+        webSecurity: false, // Allows YouTube embeds to work
+        allowRunningInsecureContent: true, // Helps with mixed content
+        experimentalFeatures: true, // Enables modern web features
         preload: join(currentDir, 'preload.cjs'),
       },
     })
+
+    // Set user agent to avoid YouTube blocking
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    this.mainWindow.webContents.setUserAgent(userAgent)
 
     // Load the app
     if (this.isDev) {

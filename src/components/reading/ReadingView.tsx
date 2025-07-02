@@ -22,6 +22,7 @@ import { formatTimeAgo } from '@/lib/dateUtils'
 import { processStoryContent } from '@/lib/htmlUtils'
 import { extractTextSelection, applyHighlightsToContent, debounce, scrollToHighlight } from '@/lib/highlightUtils'
 import { HighlightPopup } from './HighlightPopup'
+import { YouTubeEmbed } from './YouTubeEmbed'
 
 /**
  * Full-screen reading view component with enhanced typography
@@ -881,6 +882,12 @@ export function ReadingView({
                 <span>{story.publication_name}</span>
                 <span>•</span>
                 <span>{timeAgo}</span>
+                {story.content_type === 'video' && story.video_duration && (
+                  <>
+                    <span>•</span>
+                    <span>{story.video_duration} min video</span>
+                  </>
+                )}
               </div>
               
               {story.category && (
@@ -890,6 +897,41 @@ export function ReadingView({
               )}
             </div>
           </header>
+
+          {/* Video Content */}
+          {story.content_type === 'video' && story.video_url && (
+            <div className="mb-8">
+              <YouTubeEmbed 
+                videoUrl={story.video_url} 
+                title={story.title}
+                className="mb-6"
+              />
+              
+              {/* Video metadata */}
+              <div className="flex items-center justify-between text-sm text-text-secondary-light dark:text-text-secondary-dark mb-6">
+                <div className="flex items-center space-x-4">
+                  {story.video_duration && (
+                    <span>Duration: {story.video_duration} minutes</span>
+                  )}
+                  <a 
+                    href={story.video_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-accent-light dark:text-accent-dark hover:underline"
+                  >
+                    Watch on YouTube
+                  </a>
+                </div>
+              </div>
+              
+              {/* Separator */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h2 className="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark mb-4">
+                  Additional Content
+                </h2>
+              </div>
+            </div>
+          )}
 
           {/* Article Content with Enhanced Formatting */}
           <div 

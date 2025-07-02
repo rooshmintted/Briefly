@@ -85,7 +85,10 @@ export function StoryCard({ story, onClick }: StoryCardProps) {
             <span>•</span>
             <div className="flex items-center space-x-1">
               <ClockIcon className="w-3 h-3" />
-              <span>{story.estimated_read_time || 6} min</span>
+              <span>
+                {story.estimated_read_time || story.video_duration || 6} min{' '}
+                {story.content_type === 'video' ? 'video' : 'read'}
+              </span>
             </div>
           </>
         </div>
