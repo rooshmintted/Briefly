@@ -93,3 +93,62 @@ create index IF not exists idx_highlights_story_id on public.highlights using bt
 create index IF not exists idx_highlights_user_story on public.highlights using btree (user_id, story_id) TABLESPACE pg_default;
 
 create index IF not exists idx_highlights_created_at on public.highlights using btree (created_at desc) TABLESPACE pg_default;
+
+create table public.flashcards (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  user_id uuid not null,
+  story_id uuid not null,
+  front text not null,
+  back text not null,
+  context_text text null,
+  tags text[] null,
+  difficulty integer null default 1,
+  times_reviewed integer null default 0,
+  last_reviewed_at timestamp with time zone null,
+  next_review_at timestamp with time zone null,
+  created_at timestamp with time zone null default now(),
+  updated_at timestamp with time zone null default now(),
+  constraint flashcards_pkey primary key (id),
+  constraint flashcards_story_id_fkey foreign KEY (story_id) references stories (id) on delete CASCADE,
+  constraint flashcards_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete CASCADE,
+  constraint flashcards_difficulty_check check (
+    (
+      (difficulty >= 1)
+      and (difficulty <= 5)
+    )
+  ),
+  constraint flashcards_front_not_empty check (
+    (
+      length(
+        TRIM(
+          both
+          from
+            front
+        )
+      ) > 0
+    )
+  ),
+  constraint flashcards_back_not_empty check (
+    (
+      length(
+        TRIM(
+          both
+          from
+            back
+        )
+      ) > 0
+    )
+  )
+) TABLESPACE pg_default;
+
+create index IF not exists idx_flashcards_user_id on public.flashcards using btree (user_id) TABLESPACE pg_default;
+
+create index IF not exists idx_flashcards_story_id on public.flashcards using btree (story_id) TABLESPACE pg_default;
+
+create index IF not exists idx_flashcards_user_story on public.flashcards using btree (user_id, story_id) TABLESPACE pg_default;
+
+create index IF not exists idx_flashcards_created_at on public.flashcards using btree (created_at desc) TABLESPACE pg_default;
+
+create index IF not exists idx_flashcards_next_review on public.flashcards using btree (user_id, next_review_at) TABLESPACE pg_default;
+
+create index IF not exists idx_flashcards_tags on public.flashcards using gin (tags) TABLESPACE pg_default;

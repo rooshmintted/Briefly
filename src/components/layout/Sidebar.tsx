@@ -11,7 +11,8 @@ import {
   CalendarDaysIcon,
   FunnelIcon,
   SparklesIcon,
-  PencilIcon
+  PencilIcon,
+  AcademicCapIcon
 } from '@heroicons/react/24/outline'
 import { useAppStore } from '@/stores/appStore'
 import { SmartView } from '@/types'
@@ -45,6 +46,8 @@ export function Sidebar() {
         return <BookmarkIcon className="w-4 h-4" />
       case 'highlights':
         return <PencilIcon className="w-4 h-4" />
+      case 'flashcards':
+        return <AcademicCapIcon className="w-4 h-4" />
       default:
         return <StarIcon className="w-4 h-4" />
     }
@@ -52,18 +55,16 @@ export function Sidebar() {
 
   const handleReadStatusFilter = (status: 'all' | 'read' | 'unread') => {
     // Clear active smart view when manual filters are applied
-    useAppStore.getState().setFilters({ readStatus: status })
-    if (activeSmartView) {
-      useAppStore.setState({ activeSmartView: null })
-    }
+    setFilters({ readStatus: status })
+    // Also clear active smart view to show manual filter state
+    useAppStore.setState({ activeSmartView: null })
   }
 
   const handleImportanceFilter = (importanceMin: number) => {
     // Clear active smart view when manual filters are applied  
-    useAppStore.getState().setFilters({ importanceMin })
-    if (activeSmartView) {
-      useAppStore.setState({ activeSmartView: null })
-    }
+    setFilters({ importanceMin })
+    // Also clear active smart view to show manual filter state
+    useAppStore.setState({ activeSmartView: null })
   }
 
   return (

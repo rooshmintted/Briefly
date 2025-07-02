@@ -10,12 +10,14 @@ import {
   BookmarkIcon as BookmarkOutline,
   ArrowLeftIcon,
   ArrowRightIcon,
-  ShareIcon
+  ShareIcon,
+  ChevronDownIcon,
+  AcademicCapIcon
 } from '@heroicons/react/24/outline'
 import { 
   BookmarkIcon as BookmarkSolid 
 } from '@heroicons/react/24/solid'
-import { ReadingViewProps, Story, TextSelection } from '@/types'
+import { ReadingViewProps, Story, TextSelection, Flashcard, CreateFlashcardData, UpdateFlashcardData } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { clsx } from 'clsx'
 import { formatTimeAgo } from '@/lib/dateUtils'
@@ -23,6 +25,8 @@ import { processStoryContent } from '@/lib/htmlUtils'
 import { extractTextSelection, applyHighlightsToContent, debounce, scrollToHighlight } from '@/lib/highlightUtils'
 import { HighlightPopup } from './HighlightPopup'
 import { YouTubeEmbed } from './YouTubeEmbed'
+import { FlashcardEditor } from './FlashcardEditor'
+import { FlashcardsList } from './FlashcardsList'
 
 /**
  * Full-screen reading view component with enhanced typography
@@ -35,7 +39,18 @@ export function ReadingView({
   onNavigate, 
   onClose 
 }: ReadingViewProps) {
-  const { stories, settings, highlights, loadStoryHighlights, createHighlight } = useAppStore()
+  const { 
+    stories, 
+    settings, 
+    highlights, 
+    flashcards,
+    loadStoryHighlights, 
+    createHighlight,
+    loadStoryFlashcards,
+    createFlashcard,
+    updateFlashcard,
+    deleteFlashcard 
+  } = useAppStore()
   const [readingProgress, setReadingProgress] = useState(0)
   const [loadedStory, setLoadedStory] = useState<Story | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -48,6 +63,18 @@ export function ReadingView({
   const [currentSelection, setCurrentSelection] = useState<TextSelection | null>(null)
   const [showHighlightPopup, setShowHighlightPopup] = useState(false)
   const readingContentRef = useRef<HTMLDivElement>(null)
+  
+  // Flashcards state
+  const [showFlashcards, setShowFlashcards] = useState(false)
+  const [editingFlashcard, setEditingFlashcard] = useState<Flashcard | null>(null)
+  const [isCreatingFlashcard, setIsCreatingFlashcard] = useState(false)
+  
+  // Right panel flashcard creation state
+  const [showRightPanel, setShowRightPanel] = useState(true)
+  const [isCreatingInline, setIsCreatingInline] = useState(false)
+  const [frontText, setFrontText] = useState('')
+  const [backText, setBackText] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
   
   // Try to find story in current stories array first
   const story = stories.find(s => s.id === storyId) || loadedStory
@@ -108,7 +135,8 @@ export function ReadingView({
   // Track reading progress
   useEffect(() => {
     const handleScroll = () => {
-      const scrollContainer = document.querySelector('.reading-content-scroll')
+      // Find the left content scroll container
+      const scrollContainer = document.querySelector('.reading-view .flex-1')
       if (!scrollContainer) return
 
       const scrollTop = scrollContainer.scrollTop
@@ -118,7 +146,7 @@ export function ReadingView({
       setReadingProgress(Math.min(100, Math.max(0, progress)))
     }
 
-    const scrollContainer = document.querySelector('.reading-content-scroll')
+    const scrollContainer = document.querySelector('.reading-view .flex-1')
     if (scrollContainer) {
       scrollContainer.addEventListener('scroll', handleScroll)
       return () => scrollContainer.removeEventListener('scroll', handleScroll)
@@ -262,6 +290,13 @@ export function ReadingView({
     }
   }, [story, storyId, highlights, loadStoryHighlights])
 
+  // Load flashcards when story changes
+  useEffect(() => {
+    if (story && !flashcards[storyId]) {
+      loadStoryFlashcards(storyId)
+    }
+  }, [story, storyId, flashcards, loadStoryFlashcards])
+
   // Scroll to specific highlight when highlights are loaded and highlightId is provided
   useEffect(() => {
     if (highlightId && highlights[storyId] && readingContentRef.current) {
@@ -346,8 +381,81 @@ export function ReadingView({
     window.getSelection()?.removeAllRanges()
   }
 
+  // Flashcard handling functions
+  const handleCreateFlashcard = async (flashcardData: CreateFlashcardData) => {
+    try {
+      await createFlashcard(storyId, flashcardData)
+      setIsCreatingFlashcard(false)
+    } catch (error) {
+      console.error('Error creating flashcard:', error)
+    }
+  }
+
+  const handleUpdateFlashcard = async (updates: UpdateFlashcardData) => {
+    if (!editingFlashcard) return
+    
+    try {
+      await updateFlashcard(editingFlashcard.id, updates)
+      setEditingFlashcard(null)
+    } catch (error) {
+      console.error('Error updating flashcard:', error)
+    }
+  }
+
+  const handleDeleteFlashcard = async (flashcardId: string) => {
+    try {
+      await deleteFlashcard(flashcardId, storyId)
+    } catch (error) {
+      console.error('Error deleting flashcard:', error)
+    }
+  }
+
+  const handleCreateFlashcardFromSelection = () => {
+    if (!currentSelection) return
+    
+    setIsCreatingFlashcard(true)
+    setShowHighlightPopup(false)
+    setCurrentSelection(null)
+    window.getSelection()?.removeAllRanges()
+  }
+
+  // Right panel flashcard handlers
+  const handleStartInlineCreation = () => {
+    setIsCreatingInline(true)
+    setFrontText('')
+    setBackText('')
+  }
+
+  const handleCancelInlineCreation = () => {
+    setIsCreatingInline(false)
+    setFrontText('')
+    setBackText('')
+  }
+
+  const handleSaveInlineFlashcard = async () => {
+    if (!frontText.trim() || !backText.trim()) return
+
+    setIsSaving(true)
+    
+    try {
+      await createFlashcard(storyId, {
+        front: frontText.trim(),
+        back: backText.trim()
+      })
+      
+      // Reset form
+      setIsCreatingInline(false)
+      setFrontText('')
+      setBackText('')
+    } catch (error) {
+      console.error('Error creating flashcard:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
-    <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50">
+    <div className="reading-view fixed inset-0 bg-white dark:bg-gray-900 z-50">
       {/* Enhanced CSS Styles for Beautiful Reading Experience */}
       <style dangerouslySetInnerHTML={{__html: `
         /* Enhanced Typography Styles */
@@ -730,6 +838,14 @@ export function ReadingView({
           }
         }
 
+        /* Line clamp utility */
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
         /* Responsive adjustments */
         @media (max-width: 768px) {
           .reading-content :global(.story-h1) {
@@ -845,124 +961,275 @@ export function ReadingView({
         </div>
       </div>
 
-      {/* Reading Content */}
-      <div className="reading-content-scroll absolute inset-0 overflow-y-auto pt-20 pb-8">
-        <div className={clsx(
-          'reading-content px-8 mx-auto',
-          settings.reading.contentWidth === 'narrow' && 'max-w-2xl',
-          settings.reading.contentWidth === 'medium' && 'max-w-3xl',
-          settings.reading.contentWidth === 'wide' && 'max-w-4xl',
-          settings.reading.fontSize === 'small' && 'text-sm',
-          settings.reading.fontSize === 'medium' && 'text-base',
-          settings.reading.fontSize === 'large' && 'text-lg',
-          settings.reading.lineHeight === 'compact' && 'leading-tight',
-          settings.reading.lineHeight === 'normal' && 'leading-normal',
-          settings.reading.lineHeight === 'relaxed' && 'leading-relaxed'
-        )}>
-          {/* Article Header */}
-          <header className="mb-8">
-            <h1 className="text-headline font-display font-semibold text-text-primary-light dark:text-text-primary-dark mb-4">
-              {story.title}
-            </h1>
-            
-            {story.summary && (
-              <p className="text-body-large text-text-secondary-light dark:text-text-secondary-dark mb-6 italic">
-                {story.summary}
-              </p>
-            )}
+      {/* Main Content Area */}
+      <div className="absolute inset-0 flex pt-20 pb-8">
+        {/* Left Side - Reading Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className={clsx(
+            'reading-content px-8 mx-auto',
+            settings.reading.contentWidth === 'narrow' && 'max-w-2xl',
+            settings.reading.contentWidth === 'medium' && 'max-w-3xl',
+            settings.reading.contentWidth === 'wide' && 'max-w-4xl',
+            settings.reading.fontSize === 'small' && 'text-sm',
+            settings.reading.fontSize === 'medium' && 'text-base',
+            settings.reading.fontSize === 'large' && 'text-lg',
+            settings.reading.lineHeight === 'compact' && 'leading-tight',
+            settings.reading.lineHeight === 'normal' && 'leading-normal',
+            settings.reading.lineHeight === 'relaxed' && 'leading-relaxed'
+          )}>
+            {/* Article Header */}
+            <header className="mb-8">
+              <h1 className="text-headline font-display font-semibold text-text-primary-light dark:text-text-primary-dark mb-4">
+                {story.title}
+              </h1>
+              
+              {story.summary && (
+                <p className="text-body-large text-text-secondary-light dark:text-text-secondary-dark mb-6 italic">
+                  {story.summary}
+                </p>
+              )}
 
-            <div className="flex items-center justify-between text-sm text-text-secondary-light dark:text-text-secondary-dark">
-              <div className="flex items-center space-x-2">
-                {story.sender_name && (
-                  <>
-                    <span>By {story.sender_name}</span>
-                    <span>•</span>
-                  </>
-                )}
-                <span>{story.publication_name}</span>
-                <span>•</span>
-                <span>{timeAgo}</span>
-                {story.content_type === 'video' && story.video_duration && (
-                  <>
-                    <span>•</span>
-                    <span>{story.video_duration} min video</span>
-                  </>
+              <div className="flex items-center justify-between text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                <div className="flex items-center space-x-2">
+                  {story.sender_name && (
+                    <>
+                      <span>By {story.sender_name}</span>
+                      <span>•</span>
+                    </>
+                  )}
+                  <span>{story.publication_name}</span>
+                  <span>•</span>
+                  <span>{timeAgo}</span>
+                  {story.content_type === 'video' && story.video_duration && (
+                    <>
+                      <span>•</span>
+                      <span>{story.video_duration} min video</span>
+                    </>
+                  )}
+                </div>
+                
+                {story.category && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                    {story.category}
+                  </span>
                 )}
               </div>
-              
-              {story.category && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-                  {story.category}
-                </span>
-              )}
-            </div>
-          </header>
+            </header>
 
-          {/* Video Content */}
-          {story.content_type === 'video' && story.video_url && (
-            <div className="mb-8">
-              <YouTubeEmbed 
-                videoUrl={story.video_url} 
-                title={story.title}
-                className="mb-6"
-              />
-              
-              {/* Video metadata */}
-              <div className="flex items-center justify-between text-sm text-text-secondary-light dark:text-text-secondary-dark mb-6">
-                <div className="flex items-center space-x-4">
-                  {story.video_duration && (
-                    <span>Duration: {story.video_duration} minutes</span>
-                  )}
-                  <a 
-                    href={story.video_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-accent-light dark:text-accent-dark hover:underline"
-                  >
-                    Watch on YouTube
-                  </a>
+            {/* Video Content */}
+            {story.content_type === 'video' && story.video_url && (
+              <div className="mb-8">
+                <YouTubeEmbed 
+                  videoUrl={story.video_url} 
+                  title={story.title}
+                  className="mb-6"
+                />
+                
+                {/* Video metadata */}
+                <div className="flex items-center justify-between text-sm text-text-secondary-light dark:text-text-secondary-dark mb-6">
+                  <div className="flex items-center space-x-4">
+                    {story.video_duration && (
+                      <span>Duration: {story.video_duration} minutes</span>
+                    )}
+                    <a 
+                      href={story.video_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-accent-light dark:text-accent-dark hover:underline"
+                    >
+                      Watch on YouTube
+                    </a>
+                  </div>
+                </div>
+                
+                {/* Separator */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                  <h2 className="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark mb-4">
+                    Additional Content
+                  </h2>
                 </div>
               </div>
-              
-              {/* Separator */}
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h2 className="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark mb-4">
-                  Additional Content
-                </h2>
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* Article Content with Enhanced Formatting */}
-          <div 
-            ref={readingContentRef}
-            className="reading-content prose prose-lg dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ 
-              __html: applyHighlightsToContent(
-                processStoryContent(story), 
-                highlights[storyId] || []
-              ) 
-            }}
-          />
+            {/* Article Content with Enhanced Formatting */}
+            <div 
+              ref={readingContentRef}
+              className="reading-content prose prose-lg dark:prose-invert max-w-none"
+              dangerouslySetInnerHTML={{ 
+                __html: applyHighlightsToContent(
+                  processStoryContent(story), 
+                  highlights[storyId] || []
+                ) 
+              }}
+            />
 
-          {/* Article Footer */}
-          <footer className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                Reading progress: {Math.round(readingProgress)}%
+            {/* Article Footer */}
+            <footer className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                  Reading progress: {Math.round(readingProgress)}%
+                </div>
+                
+                {story.url && (
+                  <button
+                    onClick={handleShareClick}
+                    className="btn-secondary text-sm"
+                  >
+                    Read Original Article
+                  </button>
+                )}
               </div>
-              
-              {story.url && (
-                <button
-                  onClick={handleShareClick}
-                  className="btn-secondary text-sm"
-                >
-                  Read Original Article
-                </button>
-              )}
-            </div>
-          </footer>
+            </footer>
+          </div>
         </div>
+
+        {/* Right Side - Flashcards Panel */}
+        {showRightPanel && (
+          <div className="w-80 bg-gray-50 dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
+            <div className="p-4">
+              {/* Panel Header */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark flex items-center">
+                  <AcademicCapIcon className="w-5 h-5 mr-2 text-accent-light dark:text-accent-dark" />
+                  Flashcards
+                </h3>
+                <button
+                  onClick={() => setShowRightPanel(false)}
+                  className="btn-ghost p-1"
+                  aria-label="Hide flashcards panel"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Create Flashcard Section */}
+              {!isCreatingInline ? (
+                <button
+                  onClick={handleStartInlineCreation}
+                  className="w-full btn-primary mb-4"
+                >
+                  + Create Flashcard
+                </button>
+              ) : (
+                <div className="mb-4 p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <h4 className="text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-3">
+                    New Flashcard
+                  </h4>
+                  
+                  {/* Front Text */}
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                      Front (Question)
+                    </label>
+                    <textarea
+                      value={frontText}
+                      onChange={(e) => setFrontText(e.target.value)}
+                      placeholder="Enter the question..."
+                      rows={2}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-accent-light dark:focus:ring-accent-dark focus:border-transparent bg-white dark:bg-gray-800 text-text-primary-light dark:text-text-primary-dark resize-vertical"
+                    />
+                  </div>
+
+                  {/* Back Text */}
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                      Back (Answer)
+                    </label>
+                    <textarea
+                      value={backText}
+                      onChange={(e) => setBackText(e.target.value)}
+                      placeholder="Enter the answer..."
+                      rows={2}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-accent-light dark:focus:ring-accent-dark focus:border-transparent bg-white dark:bg-gray-800 text-text-primary-light dark:text-text-primary-dark resize-vertical"
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleSaveInlineFlashcard}
+                      disabled={!frontText.trim() || !backText.trim() || isSaving}
+                      className="flex-1 text-xs py-1.5 px-3 bg-accent-light hover:bg-accent-light/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded transition-colors"
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={handleCancelInlineCreation}
+                      className="flex-1 text-xs py-1.5 px-3 bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Existing Flashcards */}
+              <div>
+                <h4 className="text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-3">
+                  Story Flashcards ({(flashcards[storyId] || []).length})
+                </h4>
+                
+                {(flashcards[storyId] || []).length === 0 ? (
+                  <div className="text-center py-6 text-text-secondary-light dark:text-text-secondary-dark">
+                    <p className="text-sm">No flashcards yet</p>
+                    <p className="text-xs mt-1">Create your first one above!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(flashcards[storyId] || []).map((flashcard) => (
+                      <div
+                        key={flashcard.id}
+                        className="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                      >
+                        <div className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                          Front:
+                        </div>
+                        <div className="text-sm text-text-primary-light dark:text-text-primary-dark mb-2 line-clamp-2">
+                          {flashcard.front}
+                        </div>
+                        
+                        <div className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                          Back:
+                        </div>
+                        <div className="text-sm text-text-primary-light dark:text-text-primary-dark mb-3 line-clamp-2">
+                          {flashcard.back}
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => setEditingFlashcard(flashcard)}
+                            className="text-xs px-2 py-1 text-accent-light dark:text-accent-dark hover:bg-accent-light/10 dark:hover:bg-accent-dark/10 rounded"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFlashcard(flashcard.id)}
+                            className="text-xs px-2 py-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Panel Toggle Button (when hidden) */}
+        {!showRightPanel && (
+          <div className="absolute top-24 right-4 z-20">
+            <button
+              onClick={() => setShowRightPanel(true)}
+              className="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg hover:shadow-xl transition-shadow"
+              aria-label="Show flashcards panel"
+            >
+              <AcademicCapIcon className="w-5 h-5 text-accent-light dark:text-accent-dark" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Highlight Popup */}
@@ -972,6 +1239,25 @@ export function ReadingView({
         onHighlight={handleCreateHighlight}
         onClose={handleCloseHighlightPopup}
       />
+
+      {/* Flashcard Editor */}
+      {(isCreatingFlashcard || editingFlashcard) && (
+        <FlashcardEditor
+          flashcard={editingFlashcard}
+          onSave={(data) => {
+            if (editingFlashcard) {
+              handleUpdateFlashcard(data as UpdateFlashcardData)
+            } else {
+              handleCreateFlashcard(data as CreateFlashcardData)
+            }
+          }}
+          onCancel={() => {
+            setIsCreatingFlashcard(false)
+            setEditingFlashcard(null)
+          }}
+          contextText={currentSelection?.text}
+        />
+      )}
     </div>
   )
 } 

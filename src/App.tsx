@@ -12,6 +12,7 @@ import { ReadingView } from '@/components/reading/ReadingView'
 import { SearchView } from '@/components/search/SearchView'
 import { SettingsView } from '@/components/settings/SettingsView'
 import { HighlightsFeed } from '@/components/highlights/HighlightsFeed'
+import { FlashcardsView } from '@/components/flashcards/FlashcardsView'
 import { useTheme } from '@/hooks/useTheme'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useSyncManager } from '@/hooks/useSyncManager'
@@ -103,6 +104,9 @@ function App() {
 
       case 'settings':
         return <SettingsView />
+
+      case 'flashcards':
+        return <FlashcardsView />
 
       case 'feed':
       default:

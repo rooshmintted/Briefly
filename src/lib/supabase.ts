@@ -4,7 +4,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { Story, FilterOptions, SortOptions, Highlight } from '@/types'
+import { Story, FilterOptions, SortOptions, Highlight, Flashcard, CreateFlashcardData, UpdateFlashcardData } from '@/types'
 
 export class SupabaseService {
   private supabase: SupabaseClient
@@ -473,6 +473,167 @@ export class SupabaseService {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       console.error('Error in deleteHighlight:', err)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  /**
+   * Create a new flashcard for a story
+   */
+  async createFlashcard(storyId: string, flashcardData: CreateFlashcardData): Promise<{ flashcard: Flashcard | null; error?: string }> {
+    if (!this.userId) {
+      return { flashcard: null, error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('flashcards')
+        .insert({
+          user_id: this.userId,
+          story_id: storyId,
+          front: flashcardData.front,
+          back: flashcardData.back,
+          context_text: flashcardData.context_text,
+          highlight_id: flashcardData.highlight_id,
+          tags: flashcardData.tags,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error creating flashcard:', error)
+        return { flashcard: null, error: error.message }
+      }
+
+      return { flashcard: data }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in createFlashcard:', err)
+      return { flashcard: null, error: errorMessage }
+    }
+  }
+
+  /**
+   * Get all flashcards for a story
+   */
+  async getStoryFlashcards(storyId: string): Promise<{ flashcards: Flashcard[]; error?: string }> {
+    if (!this.userId) {
+      return { flashcards: [], error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('flashcards')
+        .select('*')
+        .eq('user_id', this.userId)
+        .eq('story_id', storyId)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error loading flashcards:', error)
+        return { flashcards: [], error: error.message }
+      }
+
+      return { flashcards: data || [] }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in getStoryFlashcards:', err)
+      return { flashcards: [], error: errorMessage }
+    }
+  }
+
+  /**
+   * Get all flashcards for a user across all stories
+   */
+  async getAllFlashcards(): Promise<{ flashcards: Flashcard[]; error?: string }> {
+    if (!this.userId) {
+      return { flashcards: [], error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('flashcards')
+        .select('*')
+        .eq('user_id', this.userId)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error loading all flashcards:', error)
+        return { flashcards: [], error: error.message }
+      }
+
+      return { flashcards: data || [] }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in getAllFlashcards:', err)
+      return { flashcards: [], error: errorMessage }
+    }
+  }
+
+  /**
+   * Update an existing flashcard
+   */
+  async updateFlashcard(flashcardId: string, updates: UpdateFlashcardData): Promise<{ flashcard: Flashcard | null; error?: string }> {
+    if (!this.userId) {
+      return { flashcard: null, error: 'User ID not set' }
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('flashcards')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', flashcardId)
+        .eq('user_id', this.userId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error updating flashcard:', error)
+        return { flashcard: null, error: error.message }
+      }
+
+      return { flashcard: data }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in updateFlashcard:', err)
+      return { flashcard: null, error: errorMessage }
+    }
+  }
+
+  /**
+   * Delete a flashcard
+   */
+  async deleteFlashcard(flashcardId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.userId) {
+      return { success: false, error: 'User ID not set' }
+    }
+
+    try {
+      const { error } = await this.supabase
+        .from('flashcards')
+        .delete()
+        .eq('id', flashcardId)
+        .eq('user_id', this.userId)
+
+      if (error) {
+        console.error('Error deleting flashcard:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Error in deleteFlashcard:', err)
       return { success: false, error: errorMessage }
     }
   }

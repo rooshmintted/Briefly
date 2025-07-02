@@ -16,7 +16,10 @@ import {
   ReadingPreferences,
   SmartView,
   DEFAULT_SMART_VIEWS,
-  Highlight
+  Highlight,
+  Flashcard,
+  CreateFlashcardData,
+  UpdateFlashcardData
 } from '@/types'
 import { parseTimestamp } from '@/lib/dateUtils'
 
@@ -89,6 +92,15 @@ interface AppStore extends AppState, StoryFeedState {
   deleteHighlight: (highlightId: string, storyId: string) => Promise<void>
   loadAllHighlights: () => Promise<void>
   
+  // Flashcards management
+  flashcards: Record<string, Flashcard[]> // Key is story ID
+  allFlashcards: Flashcard[] // All flashcards across stories
+  loadStoryFlashcards: (storyId: string) => Promise<void>
+  loadAllFlashcards: () => Promise<void>
+  createFlashcard: (storyId: string, flashcardData: CreateFlashcardData) => Promise<void>
+  updateFlashcard: (flashcardId: string, updates: UpdateFlashcardData) => Promise<void>
+  deleteFlashcard: (flashcardId: string, storyId: string) => Promise<void>
+  
   // Filter and search actions
   setFilters: (filters: Partial<FilterOptions>) => void
   resetFilters: () => void
@@ -145,6 +157,10 @@ export const useAppStore = create<AppStore>()(
       activeSmartView: null,
       highlights: {},
       selectedHighlightId: null,
+      
+      // Flashcards initial state
+      flashcards: {},
+      allFlashcards: [],
 
       // Story management actions
       loadStories: () => {
@@ -259,10 +275,44 @@ export const useAppStore = create<AppStore>()(
       },
 
       selectStory: (storyId, highlightId) => {
-        set({ 
-          selectedStoryId: storyId,
-          selectedHighlightId: highlightId || null,
-          currentView: storyId ? 'reading' : 'feed'
+        set((state) => {
+          const newState: any = {
+            selectedStoryId: storyId,
+            selectedHighlightId: highlightId || null,
+            currentView: storyId ? 'reading' : 'feed'
+          }
+          
+          // When returning to feed (storyId is null), recalculate filteredStories
+          // based on current smart view and filters to ensure proper display
+          if (!storyId) {
+            let filteredStories: Story[]
+            
+            if (state.activeSmartView) {
+              // If there's an active smart view, apply its filters
+              const activeView = state.smartViews.find(v => v.id === state.activeSmartView)
+              if (activeView) {
+                console.log('[selectStory] Applying active smart view filters when returning to feed:', activeView.name)
+                if (activeView.id === 'highlights') {
+                  // For highlights view, let StoryFeed handle the display
+                  filteredStories = state.stories
+                } else {
+                  // For other views, apply the smart view's filters
+                  filteredStories = applyFiltersAndSearch(state.stories, activeView.filters, '')
+                }
+              } else {
+                // Smart view not found, fall back to current filters
+                filteredStories = applyFiltersAndSearch(state.stories, state.filters, state.searchQuery)
+              }
+            } else {
+              // No active smart view, use current filters
+              filteredStories = applyFiltersAndSearch(state.stories, state.filters, state.searchQuery)
+            }
+            
+            newState.filteredStories = filteredStories
+            console.log('[selectStory] Recalculated filteredStories when returning to feed:', filteredStories.length)
+          }
+          
+          return newState
         })
       },
 
@@ -533,6 +583,245 @@ export const useAppStore = create<AppStore>()(
         }
       },
 
+      // Flashcards management actions
+      loadStoryFlashcards: async (storyId: string) => {
+        try {
+          const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+          const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
+
+          if (!service) {
+            console.error('Supabase service not available for loading flashcards')
+            return
+          }
+
+          let currentUserId = userId
+          if (!currentUserId || currentUserId === 'dev-user') {
+            try {
+              const storedUserId = await window.electronAPI?.getAppSetting('userId')
+              if (storedUserId) {
+                currentUserId = storedUserId
+              }
+            } catch (error) {
+              console.warn('Could not retrieve stored user ID for flashcards:', error)
+            }
+          }
+
+          service.setUserId(currentUserId)
+          const result = await service.getStoryFlashcards(storyId)
+
+          if (result.error) {
+            console.error('Error loading story flashcards:', result.error)
+            return
+          }
+
+          set((state) => ({
+            flashcards: {
+              ...state.flashcards,
+              [storyId]: result.flashcards
+            }
+          }))
+        } catch (error) {
+          console.error('Error in loadStoryFlashcards:', error)
+        }
+      },
+
+      loadAllFlashcards: async () => {
+        try {
+          const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+          const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
+
+          if (!service) {
+            console.error('Supabase service not available for loading all flashcards')
+            return
+          }
+
+          let currentUserId = userId
+          if (!currentUserId || currentUserId === 'dev-user') {
+            try {
+              const storedUserId = await window.electronAPI?.getAppSetting('userId')
+              if (storedUserId) {
+                currentUserId = storedUserId
+              }
+            } catch (error) {
+              console.warn('Could not retrieve stored user ID for all flashcards:', error)
+            }
+          }
+
+          service.setUserId(currentUserId)
+          const result = await service.getAllFlashcards()
+
+          if (result.error) {
+            console.error('Error loading all flashcards:', result.error)
+            return
+          }
+
+          set((state) => ({
+            allFlashcards: result.flashcards
+          }))
+        } catch (error) {
+          console.error('Error in loadAllFlashcards:', error)
+        }
+      },
+
+      createFlashcard: async (storyId: string, flashcardData: CreateFlashcardData) => {
+        try {
+          const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+          const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
+
+          if (!service) {
+            console.error('Supabase service not available for creating flashcard')
+            return
+          }
+
+          let currentUserId = userId
+          if (!currentUserId || currentUserId === 'dev-user') {
+            try {
+              const storedUserId = await window.electronAPI?.getAppSetting('userId')
+              if (storedUserId) {
+                currentUserId = storedUserId
+              }
+            } catch (error) {
+              console.warn('Could not retrieve stored user ID for flashcard creation:', error)
+            }
+          }
+
+          service.setUserId(currentUserId)
+          const result = await service.createFlashcard(storyId, flashcardData)
+
+          if (result.error) {
+            console.error('Error creating flashcard:', result.error)
+            return
+          }
+
+          if (result.flashcard) {
+            set((state) => ({
+              flashcards: {
+                ...state.flashcards,
+                [storyId]: [...(state.flashcards[storyId] || []), result.flashcard!]
+              },
+              allFlashcards: [...state.allFlashcards, result.flashcard!]
+            }))
+          }
+        } catch (error) {
+          console.error('Error in createFlashcard:', error)
+        }
+      },
+
+      updateFlashcard: async (flashcardId: string, updates: UpdateFlashcardData) => {
+        try {
+          const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+          const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
+
+          if (!service) {
+            console.error('Supabase service not available for updating flashcard')
+            return
+          }
+
+          let currentUserId = userId
+          if (!currentUserId || currentUserId === 'dev-user') {
+            try {
+              const storedUserId = await window.electronAPI?.getAppSetting('userId')
+              if (storedUserId) {
+                currentUserId = storedUserId
+              }
+            } catch (error) {
+              console.warn('Could not retrieve stored user ID for flashcard update:', error)
+            }
+          }
+
+          service.setUserId(currentUserId)
+          const result = await service.updateFlashcard(flashcardId, updates)
+
+          if (result.error) {
+            console.error('Error updating flashcard:', result.error)
+            return
+          }
+
+          if (result.flashcard) {
+            set((state) => ({
+              flashcards: Object.fromEntries(
+                Object.entries(state.flashcards).map(([storyId, cards]) => [
+                  storyId,
+                  cards.map(card => card.id === flashcardId ? result.flashcard! : card)
+                ])
+              ),
+              allFlashcards: state.allFlashcards.map(card => 
+                card.id === flashcardId ? result.flashcard! : card
+              )
+            }))
+          }
+        } catch (error) {
+          console.error('Error in updateFlashcard:', error)
+        }
+      },
+
+      deleteFlashcard: async (flashcardId: string, storyId: string) => {
+        try {
+          const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+          const userId = window.electronAPI?.env.DEV_USER_ID || 'dev-user'
+
+          let service = supabaseService
+          if (!service) {
+            service = await createSupabaseServiceInstance()
+          }
+
+          if (!service) {
+            console.error('Supabase service not available for deleting flashcard')
+            return
+          }
+
+          let currentUserId = userId
+          if (!currentUserId || currentUserId === 'dev-user') {
+            try {
+              const storedUserId = await window.electronAPI?.getAppSetting('userId')
+              if (storedUserId) {
+                currentUserId = storedUserId
+              }
+            } catch (error) {
+              console.warn('Could not retrieve stored user ID for flashcard deletion:', error)
+            }
+          }
+
+          service.setUserId(currentUserId)
+          const result = await service.deleteFlashcard(flashcardId)
+
+          if (result.error) {
+            console.error('Error deleting flashcard:', result.error)
+            return
+          }
+
+          set((state) => ({
+            flashcards: {
+              ...state.flashcards,
+              [storyId]: (state.flashcards[storyId] || []).filter(card => card.id !== flashcardId)
+            },
+            allFlashcards: state.allFlashcards.filter(card => card.id !== flashcardId)
+          }))
+        } catch (error) {
+          console.error('Error in deleteFlashcard:', error)
+        }
+      },
+
       // Filter and search actions
       setFilters: (newFilters) => {
         set((state) => {
@@ -566,31 +855,47 @@ export const useAppStore = create<AppStore>()(
       },
 
       applySmartView: (view) => {
-        console.log('[AppStore] Applying smart view:', view.name, view.id)
-        console.log('[AppStore] Smart view filters:', view.filters)
+        console.log('[AppStore] ===== APPLYING SMART VIEW =====')
+        console.log('[AppStore] View:', view.name, view.id)
+        console.log('[AppStore] View filters:', view.filters)
+        console.log('[AppStore] Current active smart view before:', get().activeSmartView)
         
         set((state) => {
-          // For highlights view, we still apply it as a smart view but let StoryFeed handle the display
           const updatedFilters = view.filters
           const updatedSort = view.sort
           
-          // For non-highlights views, filter stories normally
-          let filteredStories = state.filteredStories
-          if (view.id !== 'highlights') {
+          // Always recalculate filtered stories from the base stories array
+          // This ensures we start fresh and don't carry over previous filters
+          let filteredStories: Story[]
+          
+          if (view.id === 'highlights') {
+            // For highlights view, let StoryFeed handle the display but still reset other state
+            filteredStories = state.stories
+          } else {
+            // For all other views, apply the smart view's filters
             filteredStories = applyFiltersAndSearch(state.stories, updatedFilters, '')
             console.log('[AppStore] Stories after applying smart view:', {
               totalStories: state.stories.length,
               filteredStories: filteredStories.length,
-              viewName: view.name
+              viewName: view.name,
+              appliedFilters: updatedFilters,
+              firstFewFiltered: filteredStories.slice(0, 3).map(s => ({
+                title: s.title.substring(0, 40),
+                importance: s.importance_score,
+                readTime: s.estimated_read_time
+              }))
             })
           }
+          
+          console.log('[AppStore] Setting new state with filtered stories count:', filteredStories.length)
+          console.log('[AppStore] New active smart view will be:', view.id)
           
           return {
             filters: updatedFilters,
             sort: updatedSort,
             activeSmartView: view.id,
             currentView: 'feed',
-            searchQuery: '',
+            searchQuery: '', // Clear any existing search
             filteredStories
           }
         })
@@ -735,12 +1040,18 @@ function applyFiltersAndSearch(
 
   if (filters.importanceMin > 0) {
     console.log('[applyFiltersAndSearch] Applying importance min filter:', filters.importanceMin)
+    console.log('[applyFiltersAndSearch] Sample stories with importance scores:', filtered.slice(0, 5).map(s => ({
+      title: s.title.substring(0, 50),
+      importance_score: s.importance_score
+    })))
     const beforeImportanceFilter = filtered.length
     filtered = filtered.filter(story => {
       const importance = story.importance_score || 0
       const passes = importance >= filters.importanceMin
       if (!passes) {
-        console.log(`[applyFiltersAndSearch] Story "${story.title}" filtered out by importance - score: ${importance}, min: ${filters.importanceMin}`)
+        console.log(`[applyFiltersAndSearch] Story "${story.title.substring(0, 50)}" filtered out by importance - score: ${importance}, min: ${filters.importanceMin}`)
+      } else {
+        console.log(`[applyFiltersAndSearch] Story "${story.title.substring(0, 50)}" PASSED importance filter - score: ${importance}, min: ${filters.importanceMin}`)
       }
       return passes
     })

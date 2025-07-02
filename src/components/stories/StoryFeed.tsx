@@ -7,6 +7,7 @@ import React, { useEffect } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { StoryFeedProps } from '@/types'
 import { HighlightsFeed } from '@/components/highlights/HighlightsFeed'
+import { FlashcardsView } from '@/components/flashcards/FlashcardsView'
 import { StoryCard } from '@/components/stories/StoryCard'
 
 /**
@@ -23,8 +24,9 @@ export function StoryFeed() {
     stories
   } = useAppStore()
 
-  // Check if we should show highlights instead of stories
+  // Check if we should show highlights or flashcards instead of stories
   const showHighlights = activeSmartView === 'highlights'
+  const showFlashcards = activeSmartView === 'flashcards'
 
   console.log('[StoryFeed] Rendered with:', {
     filteredStoriesCount: filteredStories.length,
@@ -92,6 +94,11 @@ export function StoryFeed() {
         }}
       />
     )
+  }
+
+  // If flashcards view is active, render flashcards instead of stories
+  if (showFlashcards) {
+    return <FlashcardsView />
   }
 
   if (filteredStories.length === 0) {

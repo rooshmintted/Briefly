@@ -139,7 +139,7 @@ export interface AppState {
   isOnline: boolean
   syncStatus: SyncStatus
   settings: AppSettings
-  currentView: 'feed' | 'reading' | 'settings' | 'search'
+  currentView: 'feed' | 'reading' | 'settings' | 'search' | 'flashcards'
   sidebarVisible: boolean
 }
 
@@ -182,6 +182,40 @@ export interface TextSelection {
   contextBefore: string
   contextAfter: string
   boundingRect: DOMRect
+}
+
+// Flashcards feature types
+export interface Flashcard {
+  id: string
+  user_id: string
+  story_id: string
+  highlight_id?: string | null
+  front: string
+  back: string
+  context_text?: string | null
+  tags?: string[] | null
+  difficulty?: number
+  times_reviewed?: number
+  last_reviewed_at?: string | null
+  next_review_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateFlashcardData {
+  front: string
+  back: string
+  context_text?: string
+  highlight_id?: string
+  tags?: string[]
+}
+
+export interface UpdateFlashcardData {
+  front?: string
+  back?: string
+  context_text?: string
+  tags?: string[]
+  difficulty?: number
 }
 
 export interface SearchBarProps {
@@ -330,6 +364,23 @@ export const DEFAULT_SMART_VIEWS: SmartView[] = [
     id: 'highlights',
     name: 'Highlights',
     description: 'Your highlighted text across all stories',
+    filters: {
+      readStatus: 'all',
+      contentTypes: [],
+      publications: [],
+      categories: [],
+      importanceMin: 0,
+      importanceMax: 10,
+      dateRange: {},
+      bookmarkedOnly: false
+    },
+    sort: { field: 'created_at', direction: 'desc' },
+    isDefault: true
+  },
+  {
+    id: 'flashcards',
+    name: 'Flashcards',
+    description: 'Your study flashcards across all stories',
     filters: {
       readStatus: 'all',
       contentTypes: [],
