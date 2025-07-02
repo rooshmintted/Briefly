@@ -75,6 +75,7 @@ export function ReadingView({
   const [frontText, setFrontText] = useState('')
   const [backText, setBackText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [aiGeneratedSuccess, setAiGeneratedSuccess] = useState(false)
   
   // Try to find story in current stories array first
   const story = stories.find(s => s.id === storyId) || loadedStory
@@ -452,6 +453,39 @@ export function ReadingView({
     } finally {
       setIsSaving(false)
     }
+  }
+
+  // Handle AI-generated flashcard
+  const handleAIFlashcard = (front: string, back: string) => {
+    console.log('handleAIFlashcard called with:', { front, back })
+    console.log('Current state before update:', { 
+      showRightPanel, 
+      isCreatingInline, 
+      frontText, 
+      backText 
+    })
+    
+    // Ensure right panel is visible
+    setShowRightPanel(true)
+    
+    // Populate the inline creation form with AI data
+    setFrontText(front)
+    setBackText(back)
+    setIsCreatingInline(true)
+    
+    // Show success indicator
+    setAiGeneratedSuccess(true)
+    setTimeout(() => setAiGeneratedSuccess(false), 3000) // Hide after 3 seconds
+    
+    console.log('AI Flashcard state updated - should show form now')
+    
+    // Scroll the right panel to the top to show the form
+    setTimeout(() => {
+      const rightPanel = document.querySelector('.w-80.bg-gray-50')
+      if (rightPanel) {
+        rightPanel.scrollTop = 0
+      }
+    }, 100)
   }
 
   return (
@@ -1102,6 +1136,18 @@ export function ReadingView({
                 </button>
               </div>
 
+              {/* AI Success Indicator */}
+              {aiGeneratedSuccess && (
+                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                      AI Flashcard Generated! Review and save below.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Create Flashcard Section */}
               {!isCreatingInline ? (
                 <button
@@ -1111,9 +1157,9 @@ export function ReadingView({
                   + Create Flashcard
                 </button>
               ) : (
-                <div className="mb-4 p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div className={`mb-4 p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 ${aiGeneratedSuccess ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}>
                   <h4 className="text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-3">
-                    New Flashcard
+                    {aiGeneratedSuccess ? 'AI Generated Flashcard' : 'New Flashcard'}
                   </h4>
                   
                   {/* Front Text */}
@@ -1238,6 +1284,7 @@ export function ReadingView({
         visible={showHighlightPopup}
         onHighlight={handleCreateHighlight}
         onClose={handleCloseHighlightPopup}
+        onAIFlashcard={handleAIFlashcard}
       />
 
       {/* Flashcard Editor */}
