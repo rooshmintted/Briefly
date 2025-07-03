@@ -12,7 +12,9 @@ import {
   BookOpenIcon,
   EyeIcon,
   EyeSlashIcon,
-  ArrowTopRightOnSquareIcon 
+  ArrowTopRightOnSquareIcon,
+  TrashIcon,
+  PencilIcon
 } from '@heroicons/react/24/outline'
 
 interface FlashcardWithStory extends Flashcard {
@@ -25,7 +27,8 @@ interface FlashcardWithStory extends Flashcard {
  */
 function FlashcardViewItem({ flashcard }: { flashcard: FlashcardWithStory }) {
   const [isFlipped, setIsFlipped] = useState(false)
-  const { selectStory, stories } = useAppStore()
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const { selectStory, stories, deleteFlashcard } = useAppStore()
 
   const handleOpenStory = () => {
     selectStory(flashcard.story_id)
@@ -33,6 +36,11 @@ function FlashcardViewItem({ flashcard }: { flashcard: FlashcardWithStory }) {
 
   const handleFlip = () => {
     setIsFlipped(!isFlipped)
+  }
+
+  const handleDelete = async () => {
+    await deleteFlashcard(flashcard.id, flashcard.story_id)
+    setShowDeleteConfirm(false)
   }
 
   return (
@@ -63,14 +71,41 @@ function FlashcardViewItem({ flashcard }: { flashcard: FlashcardWithStory }) {
             </span>
           </div>
 
-          <button
-            onClick={handleOpenStory}
-            className="flex items-center space-x-1 text-sm text-accent-light dark:text-accent-dark hover:underline"
-            title="Open story"
-          >
-            <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-            <span>Open Story</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleOpenStory}
+              className="flex items-center space-x-1 text-sm text-accent-light dark:text-accent-dark hover:underline"
+              title="Open story"
+            >
+              <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+              <span>Open Story</span>
+            </button>
+            
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-1.5 text-text-secondary-light dark:text-text-secondary-dark hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                aria-label="Delete flashcard"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            ) : (
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={handleDelete}
+                  className="px-2 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-2 py-1 text-xs bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Story Info */}

@@ -215,10 +215,18 @@ export const useAppStore = create<AppStore>()(
 
             service.setUserId(currentUserId)
             
-            // Load ALL stories first (without read status filter to ensure we get everything)
+            // Load ALL stories first (without ANY filters to ensure we get everything)
             const loadAllFilters = {
-              ...state.filters,
-              readStatus: 'all' as const // Override to get all stories regardless of read status
+              readStatus: 'all' as const,
+              contentTypes: [],
+              publications: [],
+              categories: [],
+              importanceMin: 0,
+              importanceMax: 10,
+              dateRange: {},
+              bookmarkedOnly: false,
+              estimatedReadTimeMin: undefined,
+              estimatedReadTimeMax: undefined
             }
             console.log('[AppStore] Loading ALL stories from Supabase (including read ones)')
             const result = await service.loadStories(loadAllFilters, state.sort, 100, 0)

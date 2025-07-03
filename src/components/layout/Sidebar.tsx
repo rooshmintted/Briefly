@@ -3,7 +3,7 @@
  * Contains smart views, filters, and navigation for the story feed
  */
 
-import React from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { 
   StarIcon,
   ClockIcon,
@@ -12,23 +12,132 @@ import {
   FunnelIcon,
   SparklesIcon,
   PencilIcon,
-  AcademicCapIcon
+  AcademicCapIcon,
+  TagIcon
 } from '@heroicons/react/24/outline'
 import { useAppStore } from '@/stores/appStore'
-import { SmartView } from '@/types'
+import { SmartView, Story } from '@/types'
 import { clsx } from 'clsx'
+
+/**
+ * Interface for category data with counts
+ */
+interface CategoryData {
+  name: string
+  count: number
+}
+
+/**
+ * Interface for read status data with counts
+ */
+interface ReadStatusData {
+  key: 'all' | 'read' | 'unread'
+  label: string
+  count: number
+}
+
+/**
+ * Calculate story counts for different filter criteria
+ */
+function calculateFilterCounts(stories: Story[]) {
+  // Read status counts
+  const readCount = stories.filter(story => story.is_read).length
+  const unreadCount = stories.filter(story => !story.is_read).length
+  
+  // Category counts
+  const categoryMap = new Map<string, number>()
+  stories.forEach(story => {
+    if (story.category && story.category.trim()) {
+      const category = story.category.trim()
+      categoryMap.set(category, (categoryMap.get(category) || 0) + 1)
+    }
+  })
+  
+  const categories = Array.from(categoryMap.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  
+  return {
+    readStatusCounts: [
+      { key: 'all' as const, label: 'All Stories', count: stories.length },
+      { key: 'unread' as const, label: 'Unread', count: unreadCount },
+      { key: 'read' as const, label: 'Read', count: readCount }
+    ],
+    categories
+  }
+}
 
 /**
  * Application sidebar component
  */
 export function Sidebar() {
+  const store = useAppStore()
   const { 
     smartViews, 
     activeSmartView, 
     applySmartView, 
     filters,
-    setFilters
-  } = useAppStore()
+    setFilters,
+    stories,
+    filteredStories,
+    loadStories
+  } = store
+
+  const [supabaseCategories, setSupabaseCategories] = useState<string[]>([])
+
+
+
+  // Calculate filter counts based on the full stories array
+  const { readStatusCounts, categories } = useMemo(() => {
+    return calculateFilterCounts(stories)
+  }, [stories])
+
+  // Load additional categories from Supabase to ensure we have all possible categories
+  useEffect(() => {
+    const loadSupabaseCategories = async () => {
+      try {
+        const { supabaseService, createSupabaseServiceInstance } = await import('@/lib/supabase')
+        
+        let service = supabaseService
+        if (!service) {
+          service = await createSupabaseServiceInstance()
+        }
+        
+        if (service) {
+          const result = await service.getAvailableCategories()
+          if (!result.error && result.categories.length > 0) {
+            setSupabaseCategories(result.categories)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading categories from Supabase:', error)
+      }
+    }
+    
+    loadSupabaseCategories()
+  }, [])
+
+  // Merge categories from stories and Supabase, ensuring all categories are available
+  const availableCategories = useMemo(() => {
+    const mergedCategories = new Map<string, number>()
+    
+    // Add categories from current stories with their counts
+    categories.forEach(({ name, count }) => {
+      mergedCategories.set(name, count)
+    })
+    
+    // Add categories from Supabase that might not be in current stories (with 0 count)
+    supabaseCategories.forEach(category => {
+      if (!mergedCategories.has(category)) {
+        mergedCategories.set(category, 0)
+      }
+    })
+    
+    // Convert to array and sort
+    return Array.from(mergedCategories.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [categories, supabaseCategories])
 
   const handleSmartViewClick = (view: SmartView) => {
     applySmartView(view)
@@ -66,6 +175,28 @@ export function Sidebar() {
     // Also clear active smart view to show manual filter state
     useAppStore.setState({ activeSmartView: null })
   }
+
+  const handleCategoryFilter = (category: string) => {
+    // Clear active smart view when manual filters are applied
+    const newCategories = category === 'all' ? [] : [category]
+    setFilters({ categories: newCategories })
+    // Also clear active smart view to show manual filter state
+    useAppStore.setState({ activeSmartView: null })
+  }
+
+  // Calculate importance filter story counts
+  const importanceFilterCounts = useMemo(() => {
+    const counts = []
+    for (let i = 0; i <= 10; i++) {
+      const count = stories.filter(story => (story.importance_score || 0) >= i).length
+      counts.push({ value: i, count })
+    }
+    return counts
+  }, [stories])
+
+  const currentImportanceCount = importanceFilterCounts.find(
+    item => item.value === filters.importanceMin
+  )?.count || 0
 
   return (
     <aside className="h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto">
@@ -112,31 +243,76 @@ export function Sidebar() {
               Read Status
             </h3>
             <div className="space-y-1">
-              {[
-                { key: 'all', label: 'All Stories' },
-                { key: 'unread', label: 'Unread' },
-                { key: 'read', label: 'Read' }
-              ].map(({ key, label }) => (
+              {readStatusCounts.map(({ key, label, count }) => (
                 <button
                   key={key}
-                  onClick={() => handleReadStatusFilter(key as 'all' | 'read' | 'unread')}
+                  onClick={() => handleReadStatusFilter(key)}
                   className={clsx(
-                    'w-full text-left px-2 py-1 rounded text-sm transition-colors',
+                    'w-full text-left px-2 py-1 rounded text-sm transition-colors flex items-center justify-between',
                     filters.readStatus === key
                       ? 'bg-gray-200 dark:bg-gray-600 text-text-primary-light dark:text-text-primary-dark'
                       : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-gray-700'
                   )}
                 >
-                  {label}
+                  <span>{label}</span>
+                  <span className="text-xs opacity-75">({count})</span>
                 </button>
               ))}
             </div>
           </div>
 
+          {/* Category Filter */}
+          <div className="mt-4">
+            <h3 className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark mb-2 flex items-center">
+              <TagIcon className="w-3 h-3 mr-1" />
+              Category
+            </h3>
+            <div className="space-y-1">
+              {/* All Categories Option */}
+              <button
+                onClick={() => handleCategoryFilter('all')}
+                className={clsx(
+                  'w-full text-left px-2 py-1 rounded text-sm transition-colors flex items-center justify-between',
+                  filters.categories.length === 0
+                    ? 'bg-gray-200 dark:bg-gray-600 text-text-primary-light dark:text-text-primary-dark'
+                    : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-gray-700'
+                )}
+              >
+                <span>All Categories</span>
+                <span className="text-xs opacity-75">({stories.length})</span>
+              </button>
+              
+              {/* Individual Category Options */}
+              {availableCategories.map(({ name, count }) => (
+                <button
+                  key={name}
+                  onClick={() => handleCategoryFilter(name)}
+                  className={clsx(
+                    'w-full text-left px-2 py-1 rounded text-sm transition-colors flex items-center justify-between',
+                    filters.categories.includes(name)
+                      ? 'bg-gray-200 dark:bg-gray-600 text-text-primary-light dark:text-text-primary-dark'
+                      : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-gray-700'
+                  )}
+                >
+                  <span>{name}</span>
+                  <span className="text-xs opacity-75">({count})</span>
+                </button>
+              ))}
+              
+              {/* Show message if no categories available */}
+              {availableCategories.length === 0 && (
+                <div className="text-xs text-text-secondary-light dark:text-text-secondary-dark italic px-2 py-1">
+                  No categories available
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Importance Filter */}
           <div className="mt-4">
-            <h3 className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark mb-2">
-              Importance
+            <h3 className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark mb-2 flex items-center justify-between">
+              <span>Importance</span>
+              <span className="text-xs opacity-75">({currentImportanceCount})</span>
             </h3>
             <div className="flex items-center space-x-2">
               <input
