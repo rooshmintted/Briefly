@@ -1,15 +1,14 @@
 # Briefly Desktop
 
-An AI-powered offline-first newsletter reading application built with Electron, React, and Supabase.
+An AI-powered newsletter reading application built with Electron, React, and Supabase.
 
 ## Overview
 
-Briefly Desktop transforms newsletter overload into a curated, prioritized reading experience with complete offline capability. The app uses AI-powered content scoring to help you focus on the most important stories while providing a distraction-free reading environment.
+Briefly Desktop transforms newsletter overload into a curated, prioritized reading experience. The app uses AI-powered content scoring to help you focus on the most important stories while providing a distraction-free reading environment.
 
 ## Features
 
 ### Core Features
-- **Offline-First Architecture**: Read stories without an internet connection
 - **AI Content Prioritization**: Stories ranked by importance using machine learning
 - **Smart Views**: Pre-configured filters like "Today's Digest", "Quick Reads", "Deep Dives"
 - **Advanced Search**: Full-text search across titles, content, and metadata
@@ -26,8 +25,6 @@ Briefly Desktop transforms newsletter overload into a curated, prioritized readi
 ### Sync & Storage
 - **Real-Time Sync**: Bidirectional sync with Supabase backend
 - **Optimistic Updates**: Immediate UI updates with eventual consistency
-- **Conflict Resolution**: Intelligent handling of offline/online state changes
-- **Smart Caching**: Prioritized local storage with automatic cleanup
 
 ## Tech Stack
 
@@ -127,17 +124,6 @@ Briefly/
 └── build/                   # Final app packages (generated)
 ```
 
-## Architecture
-
-### Offline-First Design
-
-The app is designed with offline-first principles:
-
-1. **Local Storage**: SQLite database stores all story data locally
-2. **Background Sync**: Automatic synchronization when online
-3. **Optimistic Updates**: UI updates immediately, syncs in background
-4. **Conflict Resolution**: Timestamp-based resolution with user override options
-
 ### Component Architecture
 
 The app follows a modular component architecture:
@@ -151,7 +137,6 @@ The app follows a modular component architecture:
 
 - **Zustand**: Global app state (stories, filters, settings)
 - **React Query**: Server state and caching
-- **Local Storage**: Persistent user preferences
 
 ## Configuration
 
